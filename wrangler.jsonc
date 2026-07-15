@@ -1,22 +1,19 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "csm-next",
+  "keep_vars": true,
   "compatibility_date": "2026-07-15",
   "main": "./worker/index.js",
   "assets": {
     "directory": "./src",
     "binding": "ASSETS",
+    "html_handling": "none",
     "run_worker_first": [
       "/",
-      "/index.html",
-      "/detail.html",
-      "/config.json"
+      "/config.json",
+      "/detail",
+      "/pages",
+      "/pages/*"
     ]
-  },
-  "vars": {
-    "CSM_API_BASE": "https://cf-server-monitor.eriii.workers.dev",
-    "CSM_SITE_TITLE": "CF-Server-Monitor",
-    "CSM_BACKGROUND_IMAGE": "",
-    "CSM_REFRESH_INTERVAL": "60000"
   }
 }

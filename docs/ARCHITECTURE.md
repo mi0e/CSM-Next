@@ -19,7 +19,7 @@ CF-Server-Monitor Worker / D1 / Durable Object
 
 ## 目录职责
 
-- `src/pages/`：HTML 页面入口。
+- `src/index.html`、`src/detail.html`：HTML 页面入口。
 - `src/assets/js/`：仪表盘与详情页逻辑。
 - `src/assets/css/`：共享样式与详情页样式。
 - `worker/`：Cloudflare Worker 路由和运行时前端配置。
@@ -32,7 +32,7 @@ CF-Server-Monitor Worker / D1 / Durable Object
 
 ## 配置策略
 
-普通静态构建优先读取 `config/config.local.json`；若不存在，则使用 `config/config.example.json`。Cloudflare Worker 部署则从 `wrangler.jsonc` 的 `vars` 生成 `/config.json`，不依赖 `dist/`。
+普通静态构建优先读取 `config/config.local.json`；若不存在，则使用 `config/config.example.json`。Cloudflare Worker 部署从控制台运行时变量生成 `/config.json`，本地 Wrangler 则读取被 Git 忽略的 `.dev.vars`，两者都不依赖 `dist/`。
 
 ## 权限边界
 

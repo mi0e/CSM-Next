@@ -1,0 +1,4 @@
+CSM_API_BASE="https://your-worker.example.workers.dev"
+CSM_SITE_TITLE="CF-Server-Monitor"
+CSM_BACKGROUND_IMAGE=""
+CSM_REFRESH_INTERVAL="60000"

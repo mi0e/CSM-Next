@@ -3,7 +3,7 @@
 感谢参与改进。提交改动前请遵循以下流程：
 
 1. 从新分支开始工作，不要提交 `dist/`、ZIP 或 `config/config.local.json`。
-2. 页面结构放在 `src/pages/`，样式放在 `src/assets/css/`，逻辑放在 `src/assets/js/`。
+2. 页面入口放在 `src/`，样式放在 `src/assets/css/`，逻辑放在 `src/assets/js/`。
 3. 不在前端代码中写入 Token、密码或私有 Worker 地址。
 4. 运行 `npm test` 和 `npm run build`。
 5. UI 改动请在 PR 中附桌面端和移动端截图。

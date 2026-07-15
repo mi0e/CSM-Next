@@ -35,8 +35,8 @@ http://127.0.0.1:4173/?preview=1
 
 ## 修改位置
 
-- 仪表盘：`src/pages/index.html`、`src/assets/js/dashboard.js`
-- 详情页：`src/pages/detail.html`、`src/assets/js/detail.js`
+- 仪表盘：`src/index.html`、`src/assets/js/dashboard.js`
+- 详情页：`src/detail.html`、`src/assets/js/detail.js`
 - 公共样式：`src/assets/css/main.css`
 - 详情样式：`src/assets/css/detail.css`
 - Worker 路由：`worker/index.js`、`wrangler.jsonc`

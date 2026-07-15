@@ -17,8 +17,18 @@ test('Worker maps public page routes to source HTML', async () => {
   const index = await worker.fetch(new Request('https://theme.example/'), env)
   const detail = await worker.fetch(new Request('https://theme.example/detail.html?id=node-1'), env)
 
-  assert.equal(await index.text(), '/pages/index.html')
-  assert.equal(await detail.text(), '/pages/detail.html')
+  assert.equal(await index.text(), '/index.html')
+  assert.equal(await detail.text(), '/detail.html')
+})
+
+test('Worker redirects legacy pages paths to root routes', async () => {
+  const index = await worker.fetch(new Request('https://theme.example/pages/?preview=1'), env)
+  const detail = await worker.fetch(new Request('https://theme.example/pages/detail.html?id=node-1'), env)
+
+  assert.equal(index.status, 308)
+  assert.equal(index.headers.get('location'), 'https://theme.example/?preview=1')
+  assert.equal(detail.status, 308)
+  assert.equal(detail.headers.get('location'), 'https://theme.example/detail.html?id=node-1')
 })
 
 test('Worker exposes runtime frontend configuration', async () => {

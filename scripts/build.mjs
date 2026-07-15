@@ -20,8 +20,8 @@ await rm(dist, { recursive: true, force: true })
 await mkdir(join(dist, 'assets'), { recursive: true })
 
 await cp(join(source, 'assets'), join(dist, 'assets'), { recursive: true })
-await cp(join(source, 'pages', 'index.html'), join(dist, 'index.html'))
-await cp(join(source, 'pages', 'detail.html'), join(dist, 'detail.html'))
+await cp(join(source, 'index.html'), join(dist, 'index.html'))
+await cp(join(source, 'detail.html'), join(dist, 'detail.html'))
 
 const localConfig = join(root, 'config', 'config.local.json')
 const exampleConfig = join(root, 'config', 'config.example.json')

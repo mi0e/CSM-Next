@@ -1,9 +1,13 @@
 dist/
 node_modules/
 .wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
 config/config.local.json
 *.zip
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+CHANGELOG.md

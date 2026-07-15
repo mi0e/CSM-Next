@@ -1,7 +1,10 @@
-const pageRoutes = new Map([
-  ['/', '/pages/index.html'],
-  ['/index.html', '/pages/index.html'],
-  ['/detail.html', '/pages/detail.html']
+const legacyRoutes = new Map([
+  ['/detail', '/detail.html'],
+  ['/pages', '/'],
+  ['/pages/', '/'],
+  ['/pages/index.html', '/'],
+  ['/pages/detail', '/detail.html'],
+  ['/pages/detail.html', '/detail.html']
 ])
 
 function apiBases(value) {
@@ -38,6 +41,12 @@ function assetRequest(request, pathname) {
   return new Request(url, request)
 }
 
+function redirectRequest(request, pathname) {
+  const url = new URL(request.url)
+  url.pathname = pathname
+  return Response.redirect(url, 308)
+}
+
 export default {
   async fetch(request, env) {
     if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -47,8 +56,10 @@ export default {
     const { pathname } = new URL(request.url)
     if (pathname === '/config.json') return jsonResponse(request, publicConfig(env))
 
-    const page = pageRoutes.get(pathname)
-    if (page) return env.ASSETS.fetch(assetRequest(request, page))
+    const redirect = legacyRoutes.get(pathname)
+    if (redirect) return redirectRequest(request, redirect)
+
+    if (pathname === '/') return env.ASSETS.fetch(assetRequest(request, '/index.html'))
 
     return env.ASSETS.fetch(request)
   }

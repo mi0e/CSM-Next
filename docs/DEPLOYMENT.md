@@ -19,25 +19,32 @@ CSM-Next 使用 Cloudflare Workers Builds 的 Git 集成。Cloudflare 直接从�
 
 `wrangler.jsonc` 已经指定 Worker 入口和静态资源目录，默认部署命令会直接完成发布。之后每次推送到 `main`，Cloudflare 都会自动构建并更新线上 Worker。
 
-## 修改后端地址
+## 设置后端地址
 
-前端配置位于 `wrangler.jsonc` 的 `vars` 中：
+第一次部署结束后，打开刚创建的 Worker：
 
-```jsonc
-"vars": {
-  "CSM_API_BASE": "https://cf-server-monitor.eriii.workers.dev",
-  "CSM_SITE_TITLE": "CF-Server-Monitor",
-  "CSM_BACKGROUND_IMAGE": "",
-  "CSM_REFRESH_INTERVAL": "60000"
-}
+1. 进入 **Settings** → **Variables and Secrets**。
+2. 选择 **Add**。
+3. 类型选择普通文本变量，不要选择 Secret。
+4. 变量名填写 `CSM_API_BASE`。
+5. 值填写自己的 CF-Server-Monitor Worker 地址，例如 `https://your-monitor.example.workers.dev`。
+6. 选择 **Deploy** 使变量生效。
+
+这是 Worker 的运行时变量，不要填在 Workers Builds 的 Build variables 中。后端 URL 最终会发送给浏览器，因此不属于敏感信息，也没有必要设成 Secret。
+
+如需连接多个后端，用英文逗号分隔：
+
+```text
+https://monitor-a.example.workers.dev,https://monitor-b.example.workers.dev
 ```
 
-- `CSM_API_BASE`：后端 Worker 地址。多个地址用英文逗号分隔。
+还可以在同一位置添加以下可选变量：
+
 - `CSM_SITE_TITLE`：页面标题。
 - `CSM_BACKGROUND_IMAGE`：背景图片地址，留空表示不使用。
 - `CSM_REFRESH_INTERVAL`：轮询间隔，单位为毫秒，最小 5000。
 
-修改后提交并推送，Cloudflare 会自动重新部署。
+`wrangler.jsonc` 已启用 `keep_vars`，因此以后 Git 自动部署不会删除这些控制台变量。
 
 ## 允许跨域访问
 
@@ -74,8 +81,11 @@ npm run cf:deploy
 本地预览 Worker 路由：
 
 ```powershell
+Copy-Item .\.dev.vars.example .\.dev.vars
 npm run cf:dev
 ```
+
+复制后先把 `.dev.vars` 中的示例地址改成自己的后端地址。该文件已被 Git 忽略。
 
 ## 普通静态托管
 

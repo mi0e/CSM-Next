@@ -65,7 +65,7 @@ npm run dev
 4. 构建命令留空，部署命令保持默认的 `npx wrangler deploy`。
 5. 保存并部署。
 
-`wrangler.jsonc` 会直接发布 `src/`，Worker 入口负责页面路由和前端配置。当前后端地址已经设为 `https://cf-server-monitor.eriii.workers.dev`。以后推送到生产分支，Cloudflare 会自动重新部署。
+`wrangler.jsonc` 会直接发布 `src/`，Worker 入口负责页面路由和前端配置。首次部署后，在 Worker 的 **Settings → Variables and Secrets** 中添加普通文本变量 `CSM_API_BASE`，值为你自己的 CF-Server-Monitor 地址。以后推送到生产分支，Cloudflare 会自动重新部署，并保留这个控制台变量。
 
 完整操作和 CORS 设置见 [部署说明](./docs/DEPLOYMENT.md)。
 
