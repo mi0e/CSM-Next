@@ -25,12 +25,10 @@ CSM-Next 使用 Cloudflare Workers Builds 的 Git 集成。Cloudflare 直接从�
 
 1. 进入 **Settings** → **Variables and Secrets**。
 2. 选择 **Add**。
-3. 类型选择普通文本变量，不要选择 Secret。
+3. 类型选择普通文本变量。
 4. 变量名填写 `CSM_API_BASE`。
 5. 值填写自己的 CF-Server-Monitor Worker 地址，例如 `https://your-monitor.example.workers.dev`。
 6. 选择 **Deploy** 使变量生效。
-
-这是 Worker 的运行时变量，不要填在 Workers Builds 的 Build variables 中。后端 URL 最终会发送给浏览器，因此不属于敏感信息，也没有必要设成 Secret。
 
 如需连接多个后端，用英文逗号分隔：
 
