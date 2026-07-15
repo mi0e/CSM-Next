@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="description" content="CF-Server-Monitor 节点详情">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f8f9fb">
+    <title>Server Detail</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2317191d'/%3E%3Cpath d='M46 20c-4-4-8-6-14-6-10 0-18 8-18 18s8 18 18 18c6 0 11-2 15-7l-7-6c-2 3-5 4-8 4-5 0-9-4-9-9s4-9 9-9c3 0 6 1 8 4z' fill='white'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="./assets/css/main.css?v=20260716-5">
+    <link rel="stylesheet" href="./assets/css/detail.css?v=20260716-5">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="topbar-inner">
+          <a class="brand" href="./" aria-label="返回监控首页">
+            <span class="brand-mark" aria-hidden="true">C</span>
+            <span id="brandTitle" class="brand-title">Server Monitor</span>
+          </a>
+
+          <nav class="top-actions" aria-label="页面工具">
+            <a class="icon-button" href="./" data-i18n-title="dashboard" title="仪表盘">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>
+            </a>
+            <button id="refreshButton" class="icon-button" type="button" data-i18n-title="refresh" title="刷新数据">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+            </button>
+            <button id="themeButton" class="icon-button" type="button" data-i18n-title="theme" title="切换主题">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-1.1-.9-2-2-2h-2.1a2 2 0 0 1-1.5-3.3l.3-.4A2 2 0 0 0 14.1 3H12Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="7.8" cy="15" r="1"/></svg>
+            </button>
+            <button id="languageButton" class="icon-button language-button" type="button" data-i18n-title="language" title="切换语言"><span>文</span><small>A</small></button>
+            <a id="adminLink" class="icon-button" href="#" data-i18n-title="admin" title="管理后台">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+            </a>
+          </nav>
+        </div>
+      </header>
+
+      <main class="detail-page">
+        <section id="detailLoading" class="detail-loading" aria-live="polite">
+          <span class="detail-spinner"></span><p data-i18n="loading">正在载入节点详情</p>
+        </section>
+
+        <section id="detailError" class="detail-error" hidden>
+          <strong data-i18n="loadFailed">无法载入节点详情</strong>
+          <p id="detailErrorMessage"></p>
+          <div><a href="./" data-i18n="back">返回仪表盘</a><button id="retryButton" type="button" data-i18n="retry">重试</button></div>
+        </section>
+
+        <div id="detailContent" hidden>
+          <section class="node-hero">
+            <div class="node-hero-main">
+              <a class="detail-back" href="./" aria-label="返回"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
+              <span id="nodeFlag" class="detail-flag" aria-hidden="true"></span>
+              <div class="node-title-wrap"><h1 id="nodeName">—</h1><code id="nodeId">—</code></div>
+            </div>
+            <span id="nodeStatus" class="detail-status">—</span>
+          </section>
+
+          <section id="specGrid" class="spec-grid" aria-label="服务器信息"></section>
+
+          <section class="monitor-workspace">
+            <div class="detail-tabs" role="tablist" aria-label="监控类型">
+              <button class="detail-tab active" type="button" data-tab="load" role="tab" aria-selected="true">Load</button>
+              <button class="detail-tab" type="button" data-tab="ping" role="tab" aria-selected="false">Ping</button>
+            </div>
+
+            <section id="loadPanel" class="detail-panel active" role="tabpanel">
+              <div class="range-switch" data-range-group="load">
+                <button type="button" data-hours="0.167">10 Min</button>
+                <button type="button" data-hours="0.5">30 Min</button>
+                <button class="active" type="button" data-hours="1">1 Hour</button>
+                <button type="button" data-hours="6">6 Hours</button>
+                <button type="button" data-hours="24">1 Day</button>
+              </div>
+
+              <div id="historyNotice" class="history-notice" hidden></div>
+              <div class="chart-grid">
+                <article class="chart-card"><header><h2>CPU</h2><span id="cpuCurrent">—</span></header><div id="cpuChart" class="chart-canvas"></div></article>
+                <article class="chart-card"><header><h2>RAM</h2><span id="ramCurrent">—</span></header><div id="ramChart" class="chart-canvas"></div></article>
+                <article class="chart-card"><header><h2 data-i18n="disk">磁盘</h2><span id="diskCurrent">—</span></header><div id="diskChart" class="chart-canvas"></div></article>
+                <article class="chart-card"><header><h2 data-i18n="netSpeed">网络速度</h2><span id="netCurrent">—</span></header><div id="netChart" class="chart-canvas"></div></article>
+                <article class="chart-card"><header><h2 data-i18n="connections">连接数</h2><span id="connectionsCurrent">—</span></header><div id="connectionsChart" class="chart-canvas"></div></article>
+                <article class="chart-card"><header><h2 data-i18n="processes">进程</h2><span id="processesCurrent">—</span></header><div id="processesChart" class="chart-canvas"></div></article>
+              </div>
+            </section>
+
+            <section id="pingPanel" class="detail-panel" role="tabpanel" hidden>
+              <div class="range-switch" data-range-group="ping">
+                <button type="button" data-hours="0.5">30 Min</button>
+                <button class="active" type="button" data-hours="1">1 Hour</button>
+                <button type="button" data-hours="6">6 Hours</button>
+                <button type="button" data-hours="12">12 Hours</button>
+                <button type="button" data-hours="24">1 Day</button>
+              </div>
+              <div id="pingLegend" class="ping-legend"></div>
+              <article class="ping-chart-card"><div id="pingChart" class="chart-canvas ping-chart"></div></article>
+            </section>
+          </section>
+
+          <footer class="footer detail-footer"><span id="versionText">CF-Server-Monitor Theme</span><a href="./" data-i18n="back">返回仪表盘</a></footer>
+        </div>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./assets/js/detail.js?v=20260716-5"></script>
+  </body>
+</html>

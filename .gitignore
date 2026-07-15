@@ -1,0 +1,9 @@
+dist/
+node_modules/
+.wrangler/
+config/config.local.json
+*.zip
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

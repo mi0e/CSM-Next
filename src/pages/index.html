@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="description" content="CSM-Next：CF-Server-Monitor 独立前端主题">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f8f9fb">
+    <title>Server Monitor</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2317191d'/%3E%3Cpath d='M46 20c-4-4-8-6-14-6-10 0-18 8-18 18s8 18 18 18c6 0 11-2 15-7l-7-6c-2 3-5 4-8 4-5 0-9-4-9-9s4-9 9-9c3 0 6 1 8 4z' fill='white'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="./assets/css/main.css?v=20260716-5">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="topbar-inner">
+          <a class="brand" href="./" aria-label="返回监控首页">
+            <span class="brand-mark" aria-hidden="true">C</span>
+            <span id="brandTitle" class="brand-title">Server Monitor</span>
+          </a>
+
+          <nav class="top-actions" aria-label="页面工具">
+            <button id="refreshButton" class="icon-button" type="button" data-i18n-title="refresh" title="刷新数据">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+            </button>
+            <button id="themeButton" class="icon-button" type="button" data-i18n-title="theme" title="切换主题">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-1.1-.9-2-2-2h-2.1a2 2 0 0 1-1.5-3.3l.3-.4A2 2 0 0 0 14.1 3H12Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="7.8" cy="15" r="1"/></svg>
+            </button>
+            <button id="languageButton" class="icon-button language-button" type="button" data-i18n-title="language" title="切换语言">
+              <span>文</span><small>A</small>
+            </button>
+            <a id="adminLink" class="icon-button" href="#" data-i18n-title="admin" title="管理后台">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+            </a>
+          </nav>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <section class="dashboard-heading">
+          <div>
+            <p id="siteEyebrow" class="eyebrow">SERVER OBSERVABILITY</p>
+            <h1 data-i18n="dashboard">Dashboard</h1>
+          </div>
+          <div id="liveState" class="live-state" aria-live="polite">
+            <span></span><em data-i18n="connecting">正在连接</em>
+          </div>
+        </section>
+
+        <section class="overview-grid" aria-label="全局统计">
+          <article class="overview-card">
+            <div class="overview-label">
+              <span data-i18n="currentTime">当前时间</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>
+            </div>
+            <strong id="currentTime">--:--:--</strong>
+            <small id="currentDate">----</small>
+          </article>
+
+          <article class="overview-card">
+            <div class="overview-label">
+              <span data-i18n="currentOnline">当前在线</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>
+            </div>
+            <strong><span id="onlineCount">-</span> <i>/</i> <span id="totalCount">-</span></strong>
+            <small><span id="offlineCount">-</span> <span data-i18n="offline">离线</span></small>
+          </article>
+
+          <article class="overview-card">
+            <div class="overview-label">
+              <span data-i18n="region">区域</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.3 3.5 5.1 3.5 8.5s-1.2 6.2-3.5 8.5M12 3.5C9.7 5.8 8.5 8.6 8.5 12s1.2 6.2 3.5 8.5"/></svg>
+            </div>
+            <strong id="regionCount">-</strong>
+            <small data-i18n="regionHint">节点分布区域</small>
+          </article>
+
+          <article class="overview-card overview-card-double">
+            <div class="overview-label">
+              <span data-i18n="trafficOverview">流量概览</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M10 7h7v7"/></svg>
+            </div>
+            <strong class="overview-line"><b class="up">↑</b><span id="trafficUp">-</span></strong>
+            <strong class="overview-line"><b class="down">↓</b><span id="trafficDown">-</span></strong>
+          </article>
+
+          <article class="overview-card overview-card-double">
+            <div class="overview-label">
+              <span data-i18n="networkSpeed">网络速度</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 3-6 10h5l-1 8 6-10h-5l1-8Z"/></svg>
+            </div>
+            <strong class="overview-line"><b class="up">↑</b><span id="speedUp">-</span></strong>
+            <strong class="overview-line"><b class="down">↓</b><span id="speedDown">-</span></strong>
+          </article>
+        </section>
+
+        <section class="dashboard-controls" aria-label="筛选与视图">
+          <label class="search-box" for="searchInput">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+            <input id="searchInput" type="search" autocomplete="off" data-i18n-placeholder="searchPlaceholder" placeholder="按名称、区域或系统搜索节点…">
+            <button id="clearSearch" class="clear-search" type="button" aria-label="清除搜索" hidden>×</button>
+          </label>
+
+          <div class="view-switch" role="group" aria-label="视图切换">
+            <button class="view-button active" type="button" data-view="grid" aria-pressed="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>
+              <span data-i18n="grid">网格</span>
+            </button>
+            <button class="view-button" type="button" data-view="table" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M4 14.5h16M9 5v14"/></svg>
+              <span data-i18n="table">表格</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="filter-row">
+          <div id="filterBar" class="filter-bar" aria-label="区域筛选"></div>
+          <p id="serverSummary" class="server-summary"><span></span><em>--</em></p>
+        </section>
+
+        <div id="statusBanner" class="status-banner" role="status" hidden>
+          <div>
+            <strong id="statusTitle">无法读取监控数据</strong>
+            <p id="statusMessage"></p>
+          </div>
+          <button id="retryButton" type="button" data-i18n="retry">重试</button>
+        </div>
+
+        <section id="gridView" class="view-panel active" aria-live="polite">
+          <div id="cardGroups" class="card-groups">
+            <div class="server-grid skeleton-grid" aria-hidden="true">
+              <div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="tableView" class="view-panel" hidden>
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th data-i18n="status">状态</th>
+                  <th data-i18n="node">节点</th>
+                  <th data-i18n="region">区域</th>
+                  <th data-i18n="system">系统</th>
+                  <th>CPU</th>
+                  <th>RAM</th>
+                  <th data-i18n="disk">磁盘</th>
+                  <th data-i18n="networkSpeed">网络速度</th>
+                  <th data-i18n="updated">更新时间</th>
+                </tr>
+              </thead>
+              <tbody id="serverTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <footer class="footer">
+          <span id="versionText">CF-Server-Monitor Theme</span>
+          <span>CSM-Next · <a id="footerAdminLink" href="#" data-i18n="admin">管理后台</a></span>
+        </footer>
+      </main>
+    </div>
+
+    <div id="turnstileModal" class="modal-backdrop" hidden>
+      <section class="verify-modal" role="dialog" aria-modal="true" aria-labelledby="verifyTitle">
+        <span class="brand-mark" aria-hidden="true">C</span>
+        <h2 id="verifyTitle" data-i18n="verifyTitle">需要完成安全验证</h2>
+        <p id="verifyMessage" data-i18n="verifyMessage">验证完成后将自动载入监控数据。</p>
+        <div id="turnstileWidget" class="turnstile-widget"></div>
+      </section>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./assets/js/dashboard.js?v=20260716-5"></script>
+  </body>
+</html>

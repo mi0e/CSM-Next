@@ -1,0 +1,8 @@
+{
+  "apiBase": [
+    "https://your-worker.example.workers.dev"
+  ],
+  "title": "CF-Server-Monitor",
+  "backgroundImage": "",
+  "refreshInterval": 60000
+}
