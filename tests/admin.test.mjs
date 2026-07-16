@@ -79,7 +79,8 @@ test('dashboard admin link passes site query and uses shared getJwt', async () =
 
 test('admin edit keeps node-level ping fields separate from effective install hosts', async () => {
   const servers = await readFile(resolve(root, 'src/assets/js/admin/servers.js'), 'utf8')
-  assert.match(servers, /function nodePingField/)
+  assert.match(servers, /from '\.\.\/shared\/ping\.js'/)
+  assert.match(servers, /export \{ nodePingField \}|nodePingField/)
   assert.match(servers, /function effectivePingNode/)
   assert.match(servers, /custom_ct: nodePingField\(/)
   assert.match(servers, /\$\('edit_custom_ct'\)\.value = nodePingField/)

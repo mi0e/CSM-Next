@@ -1,6 +1,7 @@
 import { getJwt, setJwt, isLoggedIn } from './shared/auth.js'
 import { escapeHtml } from './shared/dom.js'
-import { joinUrl, normalizeBase } from './shared/url.js'
+import { fetchJson } from './shared/http.js'
+import { applyBackgroundImage, joinUrl, normalizeBase } from './shared/url.js'
 
 const ONLINE_THRESHOLD = 5 * 60 * 1000
 const MB = 1024 * 1024
@@ -196,8 +197,7 @@ async function requestJson(path, options = {}) {
   const credential = sessionStorage.getItem(storageKey(base))
   if (jwt) headers.set('Authorization', `Bearer ${jwt}`)
   if (credential) headers.set('X-Turnstile-Verified', credential)
-  const response = await fetch(joinUrl(base, path), { ...options, headers, cache: 'no-store' })
-  const data = await response.json().catch(() => null)
+  const { response, data } = await fetchJson(joinUrl(base, path), { ...options, headers })
   const verified = response.headers.get('X-Turnstile-Verified') || data?.turnstile_verified
   if (verified) sessionStorage.setItem(storageKey(base), verified)
   if (!response.ok) {
@@ -367,10 +367,7 @@ function applyConfig() {
   elements.adminLink.href = adminHref
   if (elements.loginAdminLink) elements.loginAdminLink.href = adminHref
   if (state.preview) document.querySelectorAll('a[href="./"]').forEach(link => { link.href = './?preview=1' })
-  if (state.config.backgroundImage) {
-    document.body.style.backgroundImage = `url("${String(state.config.backgroundImage).replaceAll('"', '%22')}")`
-    document.body.classList.add('has-background')
-  }
+  applyBackgroundImage(state.config.backgroundImage)
 }
 
 function showToast(message) {

@@ -1,5 +1,6 @@
 import { translations } from './i18n.js'
 import { escapeHtml } from '../shared/dom.js'
+import { createTranslator } from '../shared/i18n.js'
 import { normalizeBase } from '../shared/url.js'
 
 const params = new URLSearchParams(location.search)
@@ -87,11 +88,7 @@ export const elements = {
   themeColor: document.querySelector('meta[name="theme-color"]')
 }
 
-export function t(key, values = {}) {
-  let text = translations[state.language]?.[key] ?? translations.en[key] ?? key
-  for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{${name}}`, String(value))
-  return text
-}
+export const t = createTranslator(translations, () => state.language)
 
 export function currentBase() {
   return state.sites[state.siteIndex]?.base || location.origin

@@ -1,10 +1,18 @@
 import { escapeHtml } from '../shared/dom.js'
+import { effectivePingNode as resolvePingNode, nodePingField } from '../shared/ping.js'
 import {
   state, elements, $, t, currentBase, truthy, showToast,
   openModal, closeModal, openConfirm, copyText
 } from './context.js'
 import { adminApi } from './api.js'
 import { loadSettings } from './settings.js'
+
+export { nodePingField }
+
+/** Effective host: node field, else global settings for that key. */
+export function effectivePingNode(serverValue, settingsKey) {
+  return resolvePingNode(serverValue, state.settings?.[settingsKey])
+}
 
 export function splitTags(value) {
   return String(value || '').split(',').map(item => item.trim()).filter(Boolean)
@@ -98,19 +106,6 @@ export async function addServer() {
   } catch (error) {
     showToast(error.message || t('operationFailed'))
   }
-}
-
-/** Effective ping host for install command: node override, else global settings. */
-export function effectivePingNode(serverValue, settingsKey) {
-  return String(serverValue || state.settings?.[settingsKey] || '').trim()
-}
-
-/**
- * Value written on edit: only node-level field.
- * Empty string means "inherit global settings" (do not copy globals into the node).
- */
-export function nodePingField(value) {
-  return String(value ?? '').trim()
 }
 
 export async function ensureSettingsLoaded() {

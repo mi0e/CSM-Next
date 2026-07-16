@@ -1,6 +1,7 @@
 import { getJwt } from './shared/auth.js'
 import { escapeHtml } from './shared/dom.js'
-import { joinUrl, normalizeBase } from './shared/url.js'
+import { fetchJson } from './shared/http.js'
+import { applyBackgroundImage, joinUrl, normalizeBase } from './shared/url.js'
 
 const ONLINE_THRESHOLD = 5 * 60 * 1000
 const DEFAULT_REFRESH_INTERVAL = 60 * 1000
@@ -379,10 +380,7 @@ function applyConfig() {
   document.title = title
   elements.brandTitle.textContent = title
   elements.siteEyebrow.textContent = String(title).toUpperCase()
-  if (state.config.backgroundImage) {
-    document.body.style.backgroundImage = `url("${String(state.config.backgroundImage).replaceAll('"', '%22')}")`
-    document.body.classList.add('has-background')
-  }
+  applyBackgroundImage(state.config.backgroundImage)
   const link = adminUrl()
   elements.adminLink.href = link
   elements.footerAdminLink.href = link
@@ -423,19 +421,12 @@ function requestHeaders(site, extra = {}) {
 }
 
 async function requestJson(site, path, options = {}) {
-  const response = await fetch(joinUrl(site.base, path), {
+  const { response, data } = await fetchJson(joinUrl(site.base, path), {
     ...options,
-    headers: requestHeaders(site, options.headers),
-    cache: options.cache || 'no-store'
+    headers: requestHeaders(site, options.headers)
   })
   const verified = response.headers.get('X-Turnstile-Verified')
   if (verified) site.verifiedCredential = verified
-  let data = null
-  try {
-    data = await response.json()
-  } catch {
-    data = null
-  }
   if (data?.turnstile_verified) site.verifiedCredential = data.turnstile_verified
   if (!response.ok) {
     const error = new Error(data?.error || `HTTP ${response.status}`)

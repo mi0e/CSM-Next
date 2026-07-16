@@ -39,7 +39,7 @@ http://127.0.0.1:4173/admin.html?preview=1
 - 仪表盘：`src/index.html`、`src/assets/js/dashboard.js`
 - 详情页：`src/detail.html`、`src/assets/js/detail.js`
 - 管理后台：`src/admin.html`、`src/assets/js/admin.js`（入口）、`src/assets/js/admin/`（`i18n` / `context` / `api` / `servers` / `settings`）、`src/assets/css/admin.css`
-- 共享模块：`src/assets/js/shared/`（`auth.js` JWT、`url.js`、`dom.js`）
+- 共享模块：`src/assets/js/shared/`（`auth` / `http` / `url` / `dom` / `i18n` / `ping`）
 - 公共样式：`src/assets/css/main.css`
 - 详情样式：`src/assets/css/detail.css`
 - Worker 路由：`worker/index.js`、`wrangler.jsonc`

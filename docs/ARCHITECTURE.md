@@ -22,7 +22,7 @@ CF-Server-Monitor Worker / D1 / Durable Object
 - `src/index.html`、`src/detail.html`、`src/admin.html`：HTML 页面入口。
 - `src/assets/js/`：仪表盘、详情页与管理后台入口逻辑。
 - `src/assets/js/admin/`：管理后台分域模块（i18n / context / api / servers / settings）。
-- `src/assets/js/shared/`：跨页共享模块（JWT、URL、DOM 转义）。
+- `src/assets/js/shared/`：跨页共享模块（JWT、HTTP、URL/背景图校验、DOM 转义、i18n、测点字段）。
 - `src/assets/css/`：共享样式、详情页与后台样式。
 - `worker/`：Cloudflare Worker 路由和运行时前端配置。
 - `config/`：公开示例配置和被忽略的本地配置。

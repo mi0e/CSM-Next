@@ -1,24 +1,12 @@
 import { getJwt, setJwt } from '../shared/auth.js'
+import { fetchJson, unwrap } from '../shared/http.js'
 import { joinUrl } from '../shared/url.js'
 import {
   state, elements, t, currentBase, truthy, showToast, showLoginError, setAuthedView
 } from './context.js'
 
 export const hooks = { enterApp: null }
-
-export async function fetchJson(url, options = {}) {
-  const response = await fetch(url, { cache: 'no-store', ...options })
-  const data = await response.json().catch(() => null)
-  return { response, data }
-}
-
-export function unwrap(data) {
-  if (!data || typeof data !== 'object') return data
-  if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
-    return { ...data, ...data.data }
-  }
-  return data
-}
+export { fetchJson, unwrap }
 
 export async function adminApi(payload, { auth = true } = {}) {
   if (state.preview) return previewAdminApi(payload)
