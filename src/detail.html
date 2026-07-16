@@ -8,8 +8,8 @@
     <meta name="theme-color" content="#f8f9fb">
     <title>Server Detail</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2317191d'/%3E%3Cpath d='M46 20c-4-4-8-6-14-6-10 0-18 8-18 18s8 18 18 18c6 0 11-2 15-7l-7-6c-2 3-5 4-8 4-5 0-9-4-9-9s4-9 9-9c3 0 6 1 8 4z' fill='white'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="./assets/css/main.css?v=20260716-5">
-    <link rel="stylesheet" href="./assets/css/detail.css?v=20260716-5">
+    <link rel="stylesheet" href="./assets/css/main.css?v=20260716-6">
+    <link rel="stylesheet" href="./assets/css/detail.css?v=20260716-6">
   </head>
   <body>
     <div class="app-shell">
@@ -67,6 +67,8 @@
               <button class="detail-tab" type="button" data-tab="ping" role="tab" aria-selected="false">Ping</button>
             </div>
 
+            <div id="historyNotice" class="history-notice" hidden></div>
+
             <section id="loadPanel" class="detail-panel active" role="tabpanel">
               <div class="range-switch" data-range-group="load">
                 <button type="button" data-hours="0.167">10 Min</button>
@@ -76,7 +78,6 @@
                 <button type="button" data-hours="24">1 Day</button>
               </div>
 
-              <div id="historyNotice" class="history-notice" hidden></div>
               <div class="chart-grid">
                 <article class="chart-card"><header><h2>CPU</h2><span id="cpuCurrent">—</span></header><div id="cpuChart" class="chart-canvas"></div></article>
                 <article class="chart-card"><header><h2>RAM</h2><span id="ramCurrent">—</span></header><div id="ramChart" class="chart-canvas"></div></article>
@@ -105,7 +106,34 @@
       </main>
     </div>
 
+    <div id="loginModal" class="modal-backdrop" hidden>
+      <section class="verify-modal login-modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+        <span class="brand-mark" aria-hidden="true">C</span>
+        <h2 id="loginTitle" data-i18n="loginTitle">登录后查看长历史</h2>
+        <p id="loginMessage" data-i18n="loginMessage">主题与原后台域名不同，登录状态无法自动共享。请在此登录一次，令牌会保存在当前站点。</p>
+        <form id="loginForm" class="login-form" autocomplete="on">
+          <label class="login-field">
+            <span data-i18n="username">用户名</span>
+            <input id="loginUsername" name="username" type="text" autocomplete="username" required>
+          </label>
+          <label class="login-field">
+            <span data-i18n="password">密码</span>
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+          </label>
+          <div id="loginTurnstile" class="turnstile-widget" hidden></div>
+          <p id="loginError" class="login-error" hidden></p>
+          <div class="login-actions">
+            <button id="loginCancel" type="button" data-i18n="cancel">取消</button>
+            <button id="loginSubmit" type="submit" data-i18n="login">登录</button>
+          </div>
+        </form>
+        <p class="login-admin-hint">
+          <a id="loginAdminLink" href="#" target="_blank" rel="noopener" data-i18n="openAdmin">打开原管理端</a>
+        </p>
+      </section>
+    </div>
+
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./assets/js/detail.js?v=20260716-5"></script>
+    <script type="module" src="./assets/js/detail.js?v=20260716-6"></script>
   </body>
 </html>

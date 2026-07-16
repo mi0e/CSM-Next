@@ -8,7 +8,13 @@ const translations = {
     online: '在线', offline: '离线', cpu: 'CPU', architecture: '架构', os: '操作系统',
     netSpeed: '网络速度', traffic: '流量', ram: '内存', swap: '交换空间', disk: '磁盘', uptime: '运行时间', lastUpdate: '最后更新',
     connections: '连接数', processes: '进程', cores: '{count} 核', unavailable: '—', download: '下行', upload: '上行',
-    historyEmpty: '当前时间范围没有历史数据', loginRequired: '超过 1 小时的历史数据需要先在原管理端登录',
+    historyEmpty: '当前时间范围没有历史数据',
+    loginRequired: '超过 1 小时的历史数据需要登录。主题与原后台域名不同，登录状态不会自动共享，请在当前站点登录一次。',
+    loginTitle: '登录后查看长历史',
+    loginMessage: 'JWT 保存在浏览器当前域名下。原管理端登录不会自动穿透到本主题，请在此输入账号密码。',
+    username: '用户名', password: '密码', login: '登录', cancel: '取消', openAdmin: '打开原管理端',
+    loginSuccess: '登录成功，正在载入历史数据', loginFailed: '登录失败，请检查账号密码',
+    loginMissing: '请输入用户名和密码', loginTurnstile: '请先完成安全验证',
     historyFailed: '历史数据载入失败', current: '当前', telecom: '电信 TCP', unicom: '联通 TCP', mobile: '移动 TCP', backup: '备用线路',
     loss: '丢包', volatility: '波动', refreshed: '详情已刷新', invalidId: '缺少服务器 ID',
     justNow: '刚刚', ago: '{value}前', dayShort: '天', hourShort: '时', minuteShort: '分', secondShort: '秒'
@@ -19,7 +25,13 @@ const translations = {
     online: 'Online', offline: 'Offline', cpu: 'CPU', architecture: 'Architecture', os: 'OS',
     netSpeed: 'Net Spd', traffic: 'Traffic', ram: 'RAM', swap: 'Swap', disk: 'Disk', uptime: 'Uptime', lastUpdate: 'Last Update',
     connections: 'Connections', processes: 'Processes', cores: '{count} Cores', unavailable: '—', download: 'Download', upload: 'Upload',
-    historyEmpty: 'No historical data in this range', loginRequired: 'History beyond one hour requires signing in through the original Admin panel',
+    historyEmpty: 'No historical data in this range',
+    loginRequired: 'History beyond one hour requires login. Because this theme uses a different domain, the original Admin session is not shared—sign in here once.',
+    loginTitle: 'Sign in for long history',
+    loginMessage: 'JWT tokens are scoped to the current browser origin. Logging into the original Admin panel does not transfer credentials here.',
+    username: 'Username', password: 'Password', login: 'Sign in', cancel: 'Cancel', openAdmin: 'Open original Admin',
+    loginSuccess: 'Signed in. Loading history…', loginFailed: 'Sign-in failed. Check username and password.',
+    loginMissing: 'Enter username and password', loginTurnstile: 'Complete the security check first',
     historyFailed: 'Failed to load history', current: 'Current', telecom: 'Telecom TCP', unicom: 'Unicom TCP', mobile: 'Mobile TCP', backup: 'Backup',
     loss: 'Loss', volatility: 'Vol', refreshed: 'Detail refreshed', invalidId: 'Missing server ID',
     justNow: 'just now', ago: '{value} ago', dayShort: 'd', hourShort: 'h', minuteShort: 'm', secondShort: 's'
@@ -32,11 +44,12 @@ const colors = {
 
 const params = new URLSearchParams(location.search)
 const state = {
-  config: {}, sites: [], site: null, server: null, history: [], hours: 1,
+  config: {}, sites: [], site: null, server: null, history: [], hours: 1, apiConfig: {},
   id: params.get('id') || '', siteIndex: Number(params.get('site') || 0), preview: params.get('preview') === '1',
   language: localStorage.getItem('csm-next-language') || (navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'),
   theme: localStorage.getItem('csm-next-theme') || 'light', tab: 'load', socket: null, socketManual: false,
-  socketRetry: null, renderTimer: null, refreshTimer: null, clockTimer: null
+  socketRetry: null, renderTimer: null, refreshTimer: null, clockTimer: null,
+  pendingHistoryHours: null, loginBusy: false, turnstileWidgetId: null
 }
 
 const elements = {
@@ -51,7 +64,12 @@ const elements = {
   netCurrent: document.querySelector('#netCurrent'), connectionsCurrent: document.querySelector('#connectionsCurrent'), processesCurrent: document.querySelector('#processesCurrent'),
   cpuChart: document.querySelector('#cpuChart'), ramChart: document.querySelector('#ramChart'), diskChart: document.querySelector('#diskChart'),
   netChart: document.querySelector('#netChart'), connectionsChart: document.querySelector('#connectionsChart'), processesChart: document.querySelector('#processesChart'),
-  pingChart: document.querySelector('#pingChart'), toast: document.querySelector('#toast'), themeColor: document.querySelector('meta[name="theme-color"]')
+  pingChart: document.querySelector('#pingChart'), toast: document.querySelector('#toast'), themeColor: document.querySelector('meta[name="theme-color"]'),
+  loginModal: document.querySelector('#loginModal'), loginForm: document.querySelector('#loginForm'),
+  loginUsername: document.querySelector('#loginUsername'), loginPassword: document.querySelector('#loginPassword'),
+  loginError: document.querySelector('#loginError'), loginMessage: document.querySelector('#loginMessage'),
+  loginSubmit: document.querySelector('#loginSubmit'), loginCancel: document.querySelector('#loginCancel'),
+  loginTurnstile: document.querySelector('#loginTurnstile'), loginAdminLink: document.querySelector('#loginAdminLink')
 }
 
 function t(key, values = {}) {
@@ -158,6 +176,39 @@ function storageKey(base) {
   return `csm-next-turnstile:${base}`
 }
 
+function jwtStorageKey(base = state.site?.base || location.origin) {
+  return `csm-next-jwt:${normalizeBase(base)}`
+}
+
+function getJwt() {
+  // Prefer site-scoped token, then legacy shared key used by original admin when co-hosted.
+  return localStorage.getItem(jwtStorageKey()) || localStorage.getItem('jwt_token') || ''
+}
+
+function setJwt(token) {
+  const scoped = jwtStorageKey()
+  if (token) {
+    localStorage.setItem(scoped, token)
+    // Keep legacy key so same-origin co-hosting with original admin stays compatible.
+    localStorage.setItem('jwt_token', token)
+    return
+  }
+  localStorage.removeItem(scoped)
+  localStorage.removeItem('jwt_token')
+}
+
+function isLoggedIn() {
+  return Boolean(getJwt())
+}
+
+function truthy(value) {
+  return value === true || value === 'true' || value === 1 || value === '1'
+}
+
+function loginTurnstileRequired() {
+  return truthy(state.apiConfig?.turnstile_login_enabled) || truthy(state.apiConfig?.turnstile_enabled)
+}
+
 async function loadConfig() {
   try {
     const response = await fetch('./config.json', { cache: 'no-store' })
@@ -170,7 +221,7 @@ async function loadConfig() {
 
 async function requestJson(path, options = {}) {
   const headers = new Headers(options.headers || {})
-  const jwt = localStorage.getItem('jwt_token')
+  const jwt = getJwt()
   const credential = sessionStorage.getItem(storageKey(state.site.base))
   if (jwt) headers.set('Authorization', `Bearer ${jwt}`)
   if (credential) headers.set('X-Turnstile-Verified', credential)
@@ -179,11 +230,139 @@ async function requestJson(path, options = {}) {
   const verified = response.headers.get('X-Turnstile-Verified') || data?.turnstile_verified
   if (verified) sessionStorage.setItem(storageKey(state.site.base), verified)
   if (!response.ok) {
+    if (response.status === 401 && jwt) setJwt('')
     const error = new Error(data?.error || `HTTP ${response.status}`)
     error.status = response.status
     throw error
   }
   return data
+}
+
+async function loadTurnstileScript() {
+  if (window.turnstile) return
+  await new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-csm-next-turnstile]')
+    if (existing) {
+      existing.addEventListener('load', resolve, { once: true })
+      existing.addEventListener('error', reject, { once: true })
+      return
+    }
+    const script = document.createElement('script')
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+    script.async = true
+    script.defer = true
+    script.dataset.csmNextTurnstile = 'true'
+    script.addEventListener('load', resolve, { once: true })
+    script.addEventListener('error', reject, { once: true })
+    document.head.append(script)
+  })
+}
+
+function destroyLoginTurnstile() {
+  if (state.turnstileWidgetId != null && window.turnstile?.remove) {
+    try { window.turnstile.remove(state.turnstileWidgetId) } catch { /* noop */ }
+  }
+  state.turnstileWidgetId = null
+  elements.loginTurnstile?.replaceChildren()
+}
+
+async function ensureLoginTurnstile() {
+  destroyLoginTurnstile()
+  const siteKey = state.apiConfig?.turnstile_site_key
+  if (!loginTurnstileRequired() || !siteKey || !elements.loginTurnstile) {
+    if (elements.loginTurnstile) elements.loginTurnstile.hidden = true
+    return
+  }
+  elements.loginTurnstile.hidden = false
+  await loadTurnstileScript()
+  state.turnstileWidgetId = window.turnstile.render(elements.loginTurnstile, {
+    sitekey: siteKey,
+    theme: state.theme,
+    'expired-callback': () => {
+      if (state.turnstileWidgetId != null) window.turnstile.reset(state.turnstileWidgetId)
+    }
+  })
+}
+
+function getLoginTurnstileToken() {
+  if (!loginTurnstileRequired()) return ''
+  if (state.turnstileWidgetId == null || !window.turnstile?.getResponse) return ''
+  return window.turnstile.getResponse(state.turnstileWidgetId) || ''
+}
+
+function showLoginError(message = '') {
+  if (!elements.loginError) return
+  elements.loginError.textContent = message
+  elements.loginError.hidden = !message
+}
+
+function openLoginModal(hours = state.pendingHistoryHours) {
+  state.pendingHistoryHours = hours
+  if (elements.loginAdminLink) elements.loginAdminLink.href = `${state.site?.base || location.origin}/#/admin`
+  if (elements.loginMessage) elements.loginMessage.textContent = t('loginMessage')
+  showLoginError('')
+  if (elements.loginModal) elements.loginModal.hidden = false
+  ensureLoginTurnstile().catch(() => showLoginError(t('loginTurnstile')))
+  requestAnimationFrame(() => elements.loginUsername?.focus())
+}
+
+function closeLoginModal({ clearPending = false } = {}) {
+  if (elements.loginModal) elements.loginModal.hidden = true
+  destroyLoginTurnstile()
+  showLoginError('')
+  if (elements.loginPassword) elements.loginPassword.value = ''
+  if (clearPending) state.pendingHistoryHours = null
+  state.loginBusy = false
+  if (elements.loginSubmit) elements.loginSubmit.disabled = false
+}
+
+async function submitLogin(event) {
+  event?.preventDefault?.()
+  if (state.loginBusy || state.preview) return
+  const username = elements.loginUsername?.value?.trim() || ''
+  const password = elements.loginPassword?.value || ''
+  if (!username || !password) {
+    showLoginError(t('loginMissing'))
+    return
+  }
+  if (loginTurnstileRequired()) {
+    const token = getLoginTurnstileToken()
+    if (!token) {
+      showLoginError(t('loginTurnstile'))
+      return
+    }
+  }
+
+  state.loginBusy = true
+  if (elements.loginSubmit) elements.loginSubmit.disabled = true
+  showLoginError('')
+  try {
+    const headers = new Headers({ 'Content-Type': 'application/json' })
+    const turnstileToken = getLoginTurnstileToken()
+    if (turnstileToken) headers.set('X-Turnstile-Token', turnstileToken)
+    const response = await fetch(joinUrl(state.site.base, '/admin/api'), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action: 'login', username, password }),
+      cache: 'no-store'
+    })
+    const data = await response.json().catch(() => null)
+    const token = data?.token || data?.data?.token
+    if (!response.ok || !token) {
+      if (state.turnstileWidgetId != null && window.turnstile?.reset) window.turnstile.reset(state.turnstileWidgetId)
+      throw new Error(data?.error || t('loginFailed'))
+    }
+    setJwt(token)
+    const pendingHours = state.pendingHistoryHours ?? state.hours
+    closeLoginModal({ clearPending: true })
+    showToast(t('loginSuccess'))
+    await loadHistory(pendingHours)
+  } catch (error) {
+    showLoginError(error.message || t('loginFailed'))
+  } finally {
+    state.loginBusy = false
+    if (elements.loginSubmit) elements.loginSubmit.disabled = false
+  }
 }
 
 function applyTheme() {
@@ -205,7 +384,9 @@ function applyConfig() {
   const title = state.config.title || 'CF-Server-Monitor'
   elements.brandTitle.textContent = title
   document.title = state.server ? `${state.server.name} · ${title}` : title
-  elements.adminLink.href = `${state.site?.base || location.origin}/#/admin`
+  const adminHref = `${state.site?.base || location.origin}/#/admin`
+  elements.adminLink.href = adminHref
+  if (elements.loginAdminLink) elements.loginAdminLink.href = adminHref
   if (state.preview) document.querySelectorAll('a[href="./"]').forEach(link => { link.href = './?preview=1' })
   if (state.config.backgroundImage) {
     document.body.style.backgroundImage = `url("${String(state.config.backgroundImage).replaceAll('"', '%22')}")`
@@ -472,6 +653,12 @@ function showHistoryNotice(message = '') {
 }
 
 async function loadHistory(hours = state.hours, button = null) {
+  if (!state.preview && hours > 1 && !isLoggedIn()) {
+    showHistoryNotice(t('loginRequired'))
+    openLoginModal(hours)
+    return
+  }
+
   button?.classList.add('is-loading')
   try {
     const data = state.preview
@@ -479,11 +666,19 @@ async function loadHistory(hours = state.hours, button = null) {
       : await requestJson(`/api/history/all?id=${encodeURIComponent(state.id)}&hours=${hours}`)
     state.history = normalizeHistory(data)
     state.hours = hours
+    state.pendingHistoryHours = null
     showHistoryNotice(state.history.length ? '' : t('historyEmpty'))
     document.querySelectorAll('.range-switch').forEach(group => group.querySelectorAll('button').forEach(item => item.classList.toggle('active', Number(item.dataset.hours) === hours)))
     renderCharts()
   } catch (error) {
-    const message = error.status === 401 ? t('loginRequired') : `${t('historyFailed')}: ${error.message}`
+    if (error.status === 401) {
+      const message = t('loginRequired')
+      showHistoryNotice(message)
+      showToast(message)
+      openLoginModal(hours)
+      return
+    }
+    const message = `${t('historyFailed')}: ${error.message}`
     showHistoryNotice(message); showToast(message)
   } finally {
     button?.classList.remove('is-loading')
@@ -586,6 +781,16 @@ function bindEvents() {
     const button = event.target.closest('[data-hours]'); if (!button) return
     loadHistory(Number(button.dataset.hours), button)
   }))
+  elements.loginForm?.addEventListener('submit', submitLogin)
+  elements.loginCancel?.addEventListener('click', () => closeLoginModal({ clearPending: true }))
+  elements.loginModal?.addEventListener('click', event => {
+    if (event.target === elements.loginModal) closeLoginModal({ clearPending: true })
+  })
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && elements.loginModal && !elements.loginModal.hidden) {
+      closeLoginModal({ clearPending: true })
+    }
+  })
   window.addEventListener('resize', () => { clearTimeout(state.renderTimer); state.renderTimer = setTimeout(renderCharts, 120) })
   window.addEventListener('beforeunload', closeSocket)
 }
@@ -599,10 +804,9 @@ async function init() {
     state.sites = (configured.length ? configured : ['']).map((base, index) => ({ index, base: normalizeBase(base) }))
     state.siteIndex = Math.max(0, Math.min(state.sites.length - 1, state.siteIndex || 0)); state.site = state.sites[state.siteIndex]
     applyConfig()
-    let apiConfig = {}
-    if (!state.preview) apiConfig = await requestJson('/api/config').catch(() => ({}))
+    if (!state.preview) state.apiConfig = await requestJson('/api/config').catch(() => ({}))
     state.server = await fetchDetail()
-    elements.versionText.textContent = apiConfig.version ? `CF-Server-Monitor ${apiConfig.version}` : 'CF-Server-Monitor Theme'
+    elements.versionText.textContent = state.apiConfig.version ? `CF-Server-Monitor ${state.apiConfig.version}` : 'CF-Server-Monitor Theme'
     elements.loading.hidden = true; elements.error.hidden = true; elements.content.hidden = false
     renderAll(); await loadHistory(1); connectSocket()
     state.refreshTimer = setInterval(() => refresh(), 60000)

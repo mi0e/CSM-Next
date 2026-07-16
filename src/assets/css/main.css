@@ -1379,6 +1379,101 @@ svg {
   justify-content: center;
 }
 
+.login-modal {
+  text-align: left;
+}
+
+.login-modal .brand-mark {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.login-modal h2,
+.login-modal > p {
+  text-align: center;
+}
+
+.login-form {
+  display: grid;
+  gap: 12px;
+}
+
+.login-field {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.login-field input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface-soft);
+  font: inherit;
+}
+
+.login-field input:focus {
+  outline: 2px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.login-error {
+  margin: 0;
+  color: var(--red);
+  font-size: 12px;
+  text-align: center;
+}
+
+.login-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.login-actions button {
+  min-width: 88px;
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface-soft);
+  cursor: pointer;
+  font: inherit;
+}
+
+.login-actions button[type="submit"] {
+  color: #fff;
+  border-color: transparent;
+  background: var(--primary);
+}
+
+.login-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.login-admin-hint {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.login-admin-hint a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.login-admin-hint a:hover {
+  text-decoration: underline;
+}
+
 .toast {
   position: fixed;
   right: 22px;

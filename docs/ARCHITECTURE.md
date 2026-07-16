@@ -37,5 +37,7 @@ CF-Server-Monitor Worker / D1 / Durable Object
 ## 权限边界
 
 - 公开页面可读取服务器列表、详情及后端允许的历史范围。
-- 超过 1 小时的历史可能需要原管理端登录。
-- 管理 API、JWT 和 Turnstile Secret 不属于主题源码。
+- 超过 1 小时的历史需要 JWT。后端只认 `Authorization: Bearer`，不读 Cookie。
+- JWT 保存在浏览器 `localStorage`，按域名隔离。主题与原管理端不在同一域名时，原后台登录状态不会自动穿透。
+- 详情页因此在本主题域名提供轻量登录：调用原 `/admin/api` 获取 token，写入当前域名 `localStorage` 后重试历史请求。
+- 管理 API、JWT Secret 和 Turnstile Secret 不属于主题源码。

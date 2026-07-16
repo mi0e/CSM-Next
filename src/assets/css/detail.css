@@ -296,7 +296,7 @@
 }
 
 .history-notice {
-  margin: 0 auto 18px;
+  margin: 0 0 16px;
   padding: 10px 14px;
   border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line));
   border-radius: 9px;
@@ -304,6 +304,10 @@
   background: var(--orange-soft);
   font-size: 11px;
   text-align: center;
+}
+
+.history-notice[hidden] {
+  display: none !important;
 }
 
 .chart-grid {
