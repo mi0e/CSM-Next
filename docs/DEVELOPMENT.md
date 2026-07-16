@@ -42,3 +42,7 @@ http://127.0.0.1:4173/?preview=1
 - Worker 路由：`worker/index.js`、`wrangler.jsonc`
 
 提交前必须运行测试和构建，并确认 `dist/` 与本地配置没有进入 Git。
+
+## Commit 消息
+
+遵循 `CONTRIBUTING.md` 中的约定：`type: summary`，例如 `fix: ...`、`docs: ...`、`refactor: ...`。语言不限，前缀必填。
