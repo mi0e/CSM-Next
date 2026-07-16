@@ -26,6 +26,8 @@ test('admin page shell exposes login, nav tabs and server table', async () => {
   assert.match(html, /id="serverTableBody"/)
   assert.match(html, /id="settingsForm"/)
   assert.match(html, /id="upgradeDbButton"/)
+  assert.match(html, /id="topbarHomeLink"/)
+  assert.match(html, /data-i18n="backHome"/)
   assert.match(html, /assets\/js\/admin\.js/)
   assert.match(html, /assets\/css\/admin\.css/)
 })

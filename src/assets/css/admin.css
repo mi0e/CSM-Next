@@ -183,6 +183,10 @@
   display: none;
 }
 
+.admin-topbar-home {
+  text-decoration: none;
+}
+
 .admin-content {
   flex: 1;
   padding: 20px 22px 32px;

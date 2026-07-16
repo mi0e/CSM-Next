@@ -138,6 +138,13 @@ function bindEvents() {
   bindServerTableEvents()
 }
 
+function applyHomeLinks() {
+  const href = state.preview ? './?preview=1' : './'
+  document.querySelectorAll('a[href="./"], a[href="./?preview=1"], #topbarHomeLink').forEach(link => {
+    link.href = href
+  })
+}
+
 async function init() {
   applyTheme()
   applyTranslations()
@@ -148,6 +155,7 @@ async function init() {
   if (state.siteIndex >= state.sites.length) state.siteIndex = 0
   elements.brandTitle.textContent = state.config.title || 'CSM-Next'
   document.title = `${t('adminPanel')} · ${state.config.title || 'CSM-Next'}`
+  applyHomeLinks()
   renderSiteSelect()
   await loadApiConfig()
 
