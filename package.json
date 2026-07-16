@@ -7,7 +7,7 @@
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "node scripts/build.mjs",
-    "test": "node --test tests/dashboard.test.mjs tests/detail.test.mjs tests/admin.test.mjs tests/worker.test.mjs",
+    "test": "node --test tests/auth.test.mjs tests/dashboard.test.mjs tests/detail.test.mjs tests/admin.test.mjs tests/worker.test.mjs",
     "dev": "node scripts/build.mjs && node scripts/serve.mjs",
     "preview": "node scripts/serve.mjs",
     "cf:dev": "wrangler dev",

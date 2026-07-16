@@ -30,8 +30,11 @@ test('admin script covers core admin API actions', async () => {
   }
   assert.match(js, /\/updateDatabase/)
   assert.match(js, /\/clearHistory/)
-  assert.match(js, /csm-next-jwt/)
+  assert.match(js, /from '\.\/shared\/auth\.js'/)
+  assert.match(js, /getJwt\(currentBase\(\)\)/)
   assert.match(js, /install\.sh/)
+  const auth = await readFile(resolve(root, 'src/assets/js/shared/auth.js'), 'utf8')
+  assert.match(auth, /csm-next-jwt/)
 })
 
 test('public pages point admin entry to theme admin.html', async () => {
@@ -41,4 +44,22 @@ test('public pages point admin entry to theme admin.html', async () => {
   assert.doesNotMatch(dashboard, /#\/admin/)
   assert.match(detail, /admin\.html/)
   assert.doesNotMatch(detail, /#\/admin/)
+})
+
+test('dashboard admin link passes site query and uses shared getJwt', async () => {
+  const dashboard = await readFile(resolve(root, 'src/assets/js/dashboard.js'), 'utf8')
+  assert.match(dashboard, /from '\.\/shared\/auth\.js'/)
+  assert.match(dashboard, /adminUrl\(siteIndex/)
+  assert.match(dashboard, /searchParams\.set\('site'/)
+  assert.match(dashboard, /getJwt\(site\?\.base/)
+  assert.doesNotMatch(dashboard, /localStorage\.getItem\('jwt_token'\)/)
+})
+
+test('admin edit keeps node-level ping fields separate from effective install hosts', async () => {
+  const admin = await readFile(resolve(root, 'src/assets/js/admin.js'), 'utf8')
+  assert.match(admin, /function nodePingField/)
+  assert.match(admin, /function effectivePingNode/)
+  assert.match(admin, /custom_ct: nodePingField\(/)
+  assert.match(admin, /\$\('edit_custom_ct'\)\.value = nodePingField/)
+  assert.match(admin, /from '\.\/shared\/auth\.js'/)
 })
