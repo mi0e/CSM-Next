@@ -1,3 +1,7 @@
+import { getJwt, setJwt, isLoggedIn } from './shared/auth.js'
+import { escapeHtml } from './shared/dom.js'
+import { joinUrl, normalizeBase } from './shared/url.js'
+
 const ONLINE_THRESHOLD = 5 * 60 * 1000
 const MB = 1024 * 1024
 
@@ -76,10 +80,6 @@ function t(key, values = {}) {
   let text = translations[state.language]?.[key] ?? translations.en[key] ?? key
   for (const [name, value] of Object.entries(values)) text = text.replaceAll(`{${name}}`, String(value))
   return text
-}
-
-function escapeHtml(value) {
-  return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;')
 }
 
 function number(value, fallback = 0) {
@@ -163,42 +163,12 @@ function flagMarkup(region, compact = false) {
   return `<img class="region-flag" src="https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.3.2/flags/4x3/${lower}.svg" alt="" referrerpolicy="no-referrer"><span class="flag-code" hidden>${escapeHtml(code)}</span>`
 }
 
-function joinUrl(base, path) {
-  return `${String(base).replace(/\/$/, '')}/${String(path).replace(/^\//, '')}`
-}
-
-function normalizeBase(value) {
-  if (!value) return location.origin
-  try { return new URL(String(value), location.href).href.replace(/\/$/, '') } catch { return String(value).replace(/\/$/, '') }
-}
-
 function storageKey(base) {
   return `csm-next-turnstile:${base}`
 }
 
-function jwtStorageKey(base = state.site?.base || location.origin) {
-  return `csm-next-jwt:${normalizeBase(base)}`
-}
-
-function getJwt() {
-  // Prefer site-scoped token, then legacy shared key used by original admin when co-hosted.
-  return localStorage.getItem(jwtStorageKey()) || localStorage.getItem('jwt_token') || ''
-}
-
-function setJwt(token) {
-  const scoped = jwtStorageKey()
-  if (token) {
-    localStorage.setItem(scoped, token)
-    // Keep legacy key so same-origin co-hosting with original admin stays compatible.
-    localStorage.setItem('jwt_token', token)
-    return
-  }
-  localStorage.removeItem(scoped)
-  localStorage.removeItem('jwt_token')
-}
-
-function isLoggedIn() {
-  return Boolean(getJwt())
+function currentBase() {
+  return state.site?.base || location.origin
 }
 
 function truthy(value) {
@@ -221,16 +191,17 @@ async function loadConfig() {
 
 async function requestJson(path, options = {}) {
   const headers = new Headers(options.headers || {})
-  const jwt = getJwt()
-  const credential = sessionStorage.getItem(storageKey(state.site.base))
+  const base = currentBase()
+  const jwt = getJwt(base)
+  const credential = sessionStorage.getItem(storageKey(base))
   if (jwt) headers.set('Authorization', `Bearer ${jwt}`)
   if (credential) headers.set('X-Turnstile-Verified', credential)
-  const response = await fetch(joinUrl(state.site.base, path), { ...options, headers, cache: 'no-store' })
+  const response = await fetch(joinUrl(base, path), { ...options, headers, cache: 'no-store' })
   const data = await response.json().catch(() => null)
   const verified = response.headers.get('X-Turnstile-Verified') || data?.turnstile_verified
-  if (verified) sessionStorage.setItem(storageKey(state.site.base), verified)
+  if (verified) sessionStorage.setItem(storageKey(base), verified)
   if (!response.ok) {
-    if (response.status === 401 && jwt) setJwt('')
+    if (response.status === 401 && jwt) setJwt('', base)
     const error = new Error(data?.error || `HTTP ${response.status}`)
     error.status = response.status
     throw error
@@ -357,7 +328,7 @@ async function submitLogin(event) {
       if (state.turnstileWidgetId != null && window.turnstile?.reset) window.turnstile.reset(state.turnstileWidgetId)
       throw new Error(data?.error || t('loginFailed'))
     }
-    setJwt(token)
+    setJwt(token, currentBase())
     const pendingHours = state.pendingHistoryHours ?? state.hours
     closeLoginModal({ clearPending: true })
     showToast(t('loginSuccess'))
@@ -661,7 +632,7 @@ function showHistoryNotice(message = '') {
 }
 
 async function loadHistory(hours = state.hours, button = null) {
-  if (!state.preview && hours > 1 && !isLoggedIn()) {
+  if (!state.preview && hours > 1 && !isLoggedIn(currentBase())) {
     showHistoryNotice(t('loginRequired'))
     openLoginModal(hours)
     return
