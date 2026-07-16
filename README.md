@@ -6,6 +6,21 @@ UI 仿照 [komari-next](https://github.com/tonyliuzj/komari-next) 制作，数�
 
 仓库已经配置好 Cloudflare Workers Builds。把仓库交给 Cloudflare 后，每次推送都会自动部署，不需要 GitHub Actions，也不需要手动上传 `dist/`。
 
+<details>
+<summary><strong>界面预览</strong>（点击展开）</summary>
+
+<br>
+
+**首页**（`?preview=1` 模拟数据）
+
+![首页预览](./docs/screenshots/home-preview.png)
+
+**管理后台**（`admin.html?preview=1`）
+
+![后台预览](./docs/screenshots/admin-preview.png)
+
+</details>
+
 ## 目前支持
 
 - 首页统计、区域筛选、搜索、网格和表格视图
