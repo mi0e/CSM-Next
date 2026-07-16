@@ -1,3 +1,7 @@
+import { getJwt } from './shared/auth.js'
+import { escapeHtml } from './shared/dom.js'
+import { joinUrl, normalizeBase } from './shared/url.js'
+
 const ONLINE_THRESHOLD = 5 * 60 * 1000
 const DEFAULT_REFRESH_INTERVAL = 60 * 1000
 const MB = 1024 * 1024
@@ -211,15 +215,6 @@ function t(key, params = {}) {
   return value
 }
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-}
-
 function clamp(value, min = 0, max = 100) {
   const number = Number.parseFloat(value)
   if (!Number.isFinite(number)) return min
@@ -332,19 +327,6 @@ function expiryLabel(value) {
   return t('days', { count: days })
 }
 
-function joinUrl(base, path) {
-  return `${String(base).replace(/\/$/, '')}/${String(path).replace(/^\//, '')}`
-}
-
-function normalizeBase(value) {
-  if (!value) return location.origin
-  try {
-    return new URL(String(value), location.href).href.replace(/\/$/, '')
-  } catch {
-    return String(value).replace(/\/$/, '')
-  }
-}
-
 function detailUrl(server) {
   const url = new URL('./detail.html', location.href)
   url.search = ''
@@ -354,11 +336,12 @@ function detailUrl(server) {
   return url.href
 }
 
-function adminUrl() {
+function adminUrl(siteIndex = 0) {
   const configured = state.config.adminUrl
   if (configured) return configured
   const url = new URL('./admin.html', location.href)
   if (state.preview) url.searchParams.set('preview', '1')
+  if (Number.isFinite(siteIndex) && siteIndex >= 0) url.searchParams.set('site', String(siteIndex))
   return url.href
 }
 
@@ -433,7 +416,7 @@ async function loadRuntimeConfig() {
 
 function requestHeaders(site, extra = {}) {
   const headers = new Headers(extra)
-  const jwt = localStorage.getItem('jwt_token')
+  const jwt = getJwt(site?.base || location.origin)
   if (jwt) headers.set('Authorization', `Bearer ${jwt}`)
   if (site?.verifiedCredential) headers.set('X-Turnstile-Verified', site.verifiedCredential)
   return headers
