@@ -1,4 +1,4 @@
-# Development
+﻿# Development
 
 ## 环境
 
@@ -39,6 +39,7 @@ http://127.0.0.1:4173/admin.html?preview=1
 - 仪表盘：`src/index.html`、`src/assets/js/dashboard.js`
 - 详情页：`src/detail.html`、`src/assets/js/detail.js`
 - 管理后台：`src/admin.html`、`src/assets/js/admin.js`、`src/assets/css/admin.css`
+- 共享模块：`src/assets/js/shared/`（`auth.js` JWT、`url.js`、`dom.js`）
 - 公共样式：`src/assets/css/main.css`
 - 详情样式：`src/assets/css/detail.css`
 - Worker 路由：`worker/index.js`、`wrangler.jsonc`
@@ -48,3 +49,4 @@ http://127.0.0.1:4173/admin.html?preview=1
 ## Commit 消息
 
 遵循 `CONTRIBUTING.md` 中的约定：`type: summary`，例如 `fix: ...`、`docs: ...`、`refactor: ...`。语言不限，前缀必填。
+

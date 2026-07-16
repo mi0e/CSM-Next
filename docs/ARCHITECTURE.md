@@ -1,4 +1,4 @@
-# Architecture
+﻿# Architecture
 
 ## 数据流
 
@@ -21,6 +21,7 @@ CF-Server-Monitor Worker / D1 / Durable Object
 
 - `src/index.html`、`src/detail.html`、`src/admin.html`：HTML 页面入口。
 - `src/assets/js/`：仪表盘、详情页与管理后台逻辑。
+- `src/assets/js/shared/`：跨页共享模块（JWT、URL、DOM 转义）。
 - `src/assets/css/`：共享样式、详情页与后台样式。
 - `worker/`：Cloudflare Worker 路由和运行时前端配置。
 - `config/`：公开示例配置和被忽略的本地配置。
@@ -41,3 +42,4 @@ CF-Server-Monitor Worker / D1 / Durable Object
 - JWT 保存在浏览器 `localStorage`，按域名隔离。主题与原管理端不在同一域名时，原后台登录状态不会自动穿透。
 - 详情页与主题后台在本主题域名登录：调用原 `/admin/api` 获取 token，写入当前域名 `localStorage`（按 `apiBase` 隔离）。
 - 管理 API、JWT Secret 和 Turnstile Secret 不属于主题源码；主题后台只消费原接口，不增加 D1 读写策略。
+
