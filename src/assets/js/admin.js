@@ -1,3 +1,7 @@
+import { getJwt, setJwt } from './shared/auth.js'
+import { escapeHtml } from './shared/dom.js'
+import { joinUrl, normalizeBase } from './shared/url.js'
+
 const translations = {
   zh: {
     adminPanel: '管理后台', loginTitle: '管理后台登录',
@@ -200,40 +204,8 @@ function t(key, values = {}) {
   return text
 }
 
-function escapeHtml(value) {
-  return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;')
-}
-
-function joinUrl(base, path) {
-  return `${String(base).replace(/\/$/, '')}/${String(path).replace(/^\//, '')}`
-}
-
-function normalizeBase(value) {
-  if (!value) return location.origin
-  try { return new URL(String(value), location.href).href.replace(/\/$/, '') } catch { return String(value).replace(/\/$/, '') }
-}
-
 function currentBase() {
   return state.sites[state.siteIndex]?.base || location.origin
-}
-
-function jwtStorageKey(base = currentBase()) {
-  return `csm-next-jwt:${normalizeBase(base)}`
-}
-
-function getJwt() {
-  return localStorage.getItem(jwtStorageKey()) || localStorage.getItem('jwt_token') || ''
-}
-
-function setJwt(token) {
-  const scoped = jwtStorageKey()
-  if (token) {
-    localStorage.setItem(scoped, token)
-    localStorage.setItem('jwt_token', token)
-    return
-  }
-  localStorage.removeItem(scoped)
-  localStorage.removeItem('jwt_token')
 }
 
 function truthy(value) {
@@ -368,7 +340,7 @@ async function adminApi(payload, { auth = true } = {}) {
   if (state.preview) return previewAdminApi(payload)
   const headers = new Headers({ 'Content-Type': 'application/json' })
   if (auth) {
-    const token = getJwt()
+    const token = getJwt(currentBase())
     if (token) headers.set('Authorization', `Bearer ${token}`)
   }
   if (payload.action === 'login') {
@@ -382,7 +354,7 @@ async function adminApi(payload, { auth = true } = {}) {
   })
   const body = unwrap(data)
   if (response.status === 401) {
-    setJwt('')
+    setJwt('', currentBase())
     setAuthedView(false)
     throw new Error(body?.error || t('unauthorized'))
   }
@@ -395,7 +367,7 @@ async function adminApi(payload, { auth = true } = {}) {
 async function postSystem(path) {
   if (state.preview) return { success: true, message: 'ok' }
   const headers = new Headers({ 'Content-Type': 'application/json' })
-  const token = getJwt()
+  const token = getJwt(currentBase())
   if (token) headers.set('Authorization', `Bearer ${token}`)
   const { response, data } = await fetchJson(joinUrl(currentBase(), path), {
     method: 'POST',
@@ -404,7 +376,7 @@ async function postSystem(path) {
   })
   const body = unwrap(data)
   if (response.status === 401) {
-    setJwt('')
+    setJwt('', currentBase())
     setAuthedView(false)
     throw new Error(t('unauthorized'))
   }
@@ -573,7 +545,7 @@ async function submitLogin(event) {
     const data = await adminApi({ action: 'login', username, password }, { auth: false })
     const token = data?.token
     if (!token) throw new Error(t('loginFailed'))
-    setJwt(token)
+    setJwt(token, currentBase())
     showToast(t('loginSuccess'))
     await enterApp()
   } catch (error) {
@@ -685,9 +657,17 @@ async function addServer() {
   }
 }
 
-// Only use node-level value, then site settings from /admin/api — no hardcoded hosts.
+/** Effective ping host for install command: node override, else global settings. */
 function effectivePingNode(serverValue, settingsKey) {
   return String(serverValue || state.settings?.[settingsKey] || '').trim()
+}
+
+/**
+ * Value written on edit: only node-level field.
+ * Empty string means "inherit global settings" (do not copy globals into the node).
+ */
+function nodePingField(value) {
+  return String(value ?? '').trim()
 }
 
 async function ensureSettingsLoaded() {
@@ -710,11 +690,11 @@ async function openEditModal(server) {
   $('edit_collect_interval').value = String(server.collect_interval ?? 0)
   $('edit_report_interval').value = String(server.report_interval || 60)
   $('edit_ping_mode').value = server.ping_mode || 'http'
-  // Prefer node-level value, otherwise global settings from get_settings.
-  $('edit_custom_ct').value = effectivePingNode(server.custom_ct, 'custom_ct')
-  $('edit_custom_cu').value = effectivePingNode(server.custom_cu, 'custom_cu')
-  $('edit_custom_cm').value = effectivePingNode(server.custom_cm, 'custom_cm')
-  $('edit_custom_bd').value = effectivePingNode(server.custom_bd, 'custom_bd')
+  // Inputs store node-level only; placeholders show global inheritance hint.
+  $('edit_custom_ct').value = nodePingField(server.custom_ct)
+  $('edit_custom_cu').value = nodePingField(server.custom_cu)
+  $('edit_custom_cm').value = nodePingField(server.custom_cm)
+  $('edit_custom_bd').value = nodePingField(server.custom_bd)
   $('edit_custom_ct').placeholder = state.settings.custom_ct || ''
   $('edit_custom_cu').placeholder = state.settings.custom_cu || ''
   $('edit_custom_cm').placeholder = state.settings.custom_cm || ''
@@ -745,10 +725,10 @@ async function saveEdit(event) {
     collect_interval: Number($('edit_collect_interval').value || 0),
     report_interval: Number($('edit_report_interval').value || 60),
     ping_mode: $('edit_ping_mode').value,
-    custom_ct: $('edit_custom_ct').value,
-    custom_cu: $('edit_custom_cu').value,
-    custom_cm: $('edit_custom_cm').value,
-    custom_bd: $('edit_custom_bd').value,
+    custom_ct: nodePingField($('edit_custom_ct').value),
+    custom_cu: nodePingField($('edit_custom_cu').value),
+    custom_cm: nodePingField($('edit_custom_cm').value),
+    custom_bd: nodePingField($('edit_custom_bd').value),
     rx_correction: $('edit_rx_correction').value,
     tx_correction: $('edit_tx_correction').value,
     is_hidden: $('edit_is_hidden').checked ? '1' : '0',
@@ -1190,7 +1170,7 @@ function bindEvents() {
     renderServers()
   })
   elements.logoutButton.addEventListener('click', () => {
-    setJwt('')
+    setJwt('', currentBase())
     setAuthedView(false)
     showToast(t('logout'))
   })
@@ -1199,7 +1179,7 @@ function bindEvents() {
   elements.siteSelect.addEventListener('change', async () => {
     state.siteIndex = Number(elements.siteSelect.value) || 0
     await loadApiConfig()
-    if (getJwt()) await enterApp()
+    if (getJwt(currentBase())) await enterApp()
     else {
       setAuthedView(false)
       await ensureLoginTurnstile()
@@ -1287,18 +1267,18 @@ async function init() {
   await loadApiConfig()
 
   if (state.preview) {
-    setJwt('preview-token')
+    setJwt('preview-token', currentBase())
     showToast(t('previewMode'))
     await enterApp()
     return
   }
 
-  if (getJwt()) {
+  if (getJwt(currentBase())) {
     try {
       await enterApp()
       return
     } catch {
-      setJwt('')
+      setJwt('', currentBase())
     }
   }
 
