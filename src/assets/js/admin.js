@@ -7,15 +7,17 @@ const translations = {
     servers: '服务器', settings: '设置', database: '数据库', nodeList: '节点列表',
     searchServers: '查找服务器', serverName: '节点名称', groupName: '分组',
     addServer: '添加节点', batchDelete: '批量删除', name: '名称', group: '分组',
-    tags: '标签', note: '备注', price: '账单', expire: '到期', traffic: '流量',
+    tags: '标签', note: '备注', price: '价格', expire: '到期', traffic: '流量',
     status: '状态', actions: '操作', online: '在线', offline: '离线', noServers: '暂无服务器，请先添加节点。',
     editServer: '编辑节点', save: '保存', cancel: '取消', copy: '复制', confirm: '确认',
-    confirmDelete: '确认删除', installCommand: '安装命令', uninstallCommand: '卸载命令',
+    confirmDelete: '确认删除', installCommand: '安装命令',
+    installCommandHint: '复制安装命令，在目标服务器上执行即可完成探针部署',
+    uninstallCommand: '卸载命令',
     targetOs: '目标系统', tagsPlaceholder: '逗号分隔', notePlaceholder: '仅后台可见',
     trafficLimit: '流量限额 (GB)', trafficCalcType: '流量计算', trafficCalcTotal: '总计',
-    trafficCalcUl: '仅上传', trafficCalcDl: '仅下载', trafficResetDay: '重置日',
-    collectInterval: '采集间隔', reportInterval: '上报间隔', pingMode: 'Ping 模式',
-    customCt: '电信', customCu: '联通', customCm: '移动', customBd: '备用',
+    trafficCalcUl: '仅上传', trafficCalcDl: '仅下载', trafficResetDay: '流量重置日',
+    collectInterval: '采集间隔（秒）', reportInterval: '上报间隔（秒）', pingMode: 'Ping 方式',
+    customCt: '中国电信测试节点', customCu: '中国联通测试节点', customCm: '中国移动测试节点', customBd: 'BD测试节点',
     rxCorrection: '下行校正 (GB)', txCorrection: '上行校正 (GB)',
     hideFromPublic: '对未登录用户隐藏', disableOfflineNotify: '禁用该节点离线通知',
     appearance: '外观', siteTitle: '站点标题', bgImage: '背景图 URL',
@@ -59,15 +61,17 @@ const translations = {
     servers: 'Servers', settings: 'Settings', database: 'Database', nodeList: 'Node list',
     searchServers: 'Search servers', serverName: 'Server name', groupName: 'Group',
     addServer: 'Add node', batchDelete: 'Batch delete', name: 'Name', group: 'Group',
-    tags: 'Tags', note: 'Note', price: 'Billing', expire: 'Expire', traffic: 'Traffic',
+    tags: 'Tags', note: 'Note', price: 'Price', expire: 'Expire', traffic: 'Traffic',
     status: 'Status', actions: 'Actions', online: 'Online', offline: 'Offline', noServers: 'No servers yet. Add a node first.',
     editServer: 'Edit node', save: 'Save', cancel: 'Cancel', copy: 'Copy', confirm: 'Confirm',
-    confirmDelete: 'Confirm delete', installCommand: 'Install command', uninstallCommand: 'Uninstall command',
+    confirmDelete: 'Confirm delete', installCommand: 'Install command',
+    installCommandHint: 'Copy the install command and run it on the target server',
+    uninstallCommand: 'Uninstall command',
     targetOs: 'Target OS', tagsPlaceholder: 'Comma separated', notePlaceholder: 'Admin only',
     trafficLimit: 'Traffic limit (GB)', trafficCalcType: 'Traffic calc', trafficCalcTotal: 'Total',
-    trafficCalcUl: 'Upload only', trafficCalcDl: 'Download only', trafficResetDay: 'Reset day',
-    collectInterval: 'Collect interval', reportInterval: 'Report interval', pingMode: 'Ping mode',
-    customCt: 'Telecom', customCu: 'Unicom', customCm: 'Mobile', customBd: 'Backup',
+    trafficCalcUl: 'Upload only', trafficCalcDl: 'Download only', trafficResetDay: 'Traffic reset day',
+    collectInterval: 'Collect interval (s)', reportInterval: 'Report interval (s)', pingMode: 'Ping mode',
+    customCt: 'China Telecom node', customCu: 'China Unicom node', customCm: 'China Mobile node', customBd: 'BD node',
     rxCorrection: 'RX correction (GB)', txCorrection: 'TX correction (GB)',
     hideFromPublic: 'Hide from public users', disableOfflineNotify: 'Disable offline notify for this node',
     appearance: 'Appearance', siteTitle: 'Site title', bgImage: 'Background image URL',
@@ -681,7 +685,18 @@ async function addServer() {
   }
 }
 
-function openEditModal(server) {
+// Only use node-level value, then site settings from /admin/api — no hardcoded hosts.
+function effectivePingNode(serverValue, settingsKey) {
+  return String(serverValue || state.settings?.[settingsKey] || '').trim()
+}
+
+async function ensureSettingsLoaded() {
+  if (state.settings && Object.keys(state.settings).length) return
+  await loadSettings()
+}
+
+async function openEditModal(server) {
+  await ensureSettingsLoaded()
   $('edit_id').value = server.id
   $('edit_name').value = server.name || ''
   $('edit_server_group').value = server.server_group || ''
@@ -695,10 +710,15 @@ function openEditModal(server) {
   $('edit_collect_interval').value = String(server.collect_interval ?? 0)
   $('edit_report_interval').value = String(server.report_interval || 60)
   $('edit_ping_mode').value = server.ping_mode || 'http'
-  $('edit_custom_ct').value = server.custom_ct || ''
-  $('edit_custom_cu').value = server.custom_cu || ''
-  $('edit_custom_cm').value = server.custom_cm || ''
-  $('edit_custom_bd').value = server.custom_bd || ''
+  // Prefer node-level value, otherwise global settings from get_settings.
+  $('edit_custom_ct').value = effectivePingNode(server.custom_ct, 'custom_ct')
+  $('edit_custom_cu').value = effectivePingNode(server.custom_cu, 'custom_cu')
+  $('edit_custom_cm').value = effectivePingNode(server.custom_cm, 'custom_cm')
+  $('edit_custom_bd').value = effectivePingNode(server.custom_bd, 'custom_bd')
+  $('edit_custom_ct').placeholder = state.settings.custom_ct || ''
+  $('edit_custom_cu').placeholder = state.settings.custom_cu || ''
+  $('edit_custom_cm').placeholder = state.settings.custom_cm || ''
+  $('edit_custom_bd').placeholder = state.settings.custom_bd || ''
   $('edit_rx_correction').value = server.rx_correction ?? ''
   $('edit_tx_correction').value = server.tx_correction ?? ''
   $('edit_is_hidden').checked = truthy(server.is_hidden)
@@ -755,10 +775,10 @@ function buildInstallCommand(server, targetOs) {
   const reportInterval = server?.report_interval || 60
   const pingMode = server?.ping_mode || 'http'
   const resetDay = server?.reset_day ?? 1
-  const customCt = server?.custom_ct || state.settings.custom_ct || ''
-  const customCu = server?.custom_cu || state.settings.custom_cu || ''
-  const customCm = server?.custom_cm || state.settings.custom_cm || ''
-  const customBd = server?.custom_bd || state.settings.custom_bd || ''
+  const customCt = effectivePingNode(server?.custom_ct, 'custom_ct')
+  const customCu = effectivePingNode(server?.custom_cu, 'custom_cu')
+  const customCm = effectivePingNode(server?.custom_cm, 'custom_cm')
+  const customBd = effectivePingNode(server?.custom_bd, 'custom_bd')
   const rx = server?.rx_correction
   const tx = server?.tx_correction
   const id = server?.id || ''
@@ -813,11 +833,30 @@ function buildUninstallCommand(targetOs) {
   return `curl -sL ${host}/${script} | ${sudoPrefix}${shell} -s uninstall`
 }
 
-function openCopyModal(server) {
+function fillCopyModalFields(server) {
+  const collectInterval = server?.collect_interval ?? 0
+  const reportInterval = server?.report_interval || 60
+  const pingMode = server?.ping_mode || 'http'
+  const resetDay = server?.reset_day ?? 1
+  $('copy_custom_ct').value = effectivePingNode(server?.custom_ct, 'custom_ct')
+  $('copy_custom_cu').value = effectivePingNode(server?.custom_cu, 'custom_cu')
+  $('copy_custom_cm').value = effectivePingNode(server?.custom_cm, 'custom_cm')
+  $('copy_custom_bd').value = effectivePingNode(server?.custom_bd, 'custom_bd')
+  $('copy_collect_interval').value = String(collectInterval)
+  $('copy_report_interval').value = String(reportInterval)
+  $('copy_ping_mode').value = String(pingMode).toUpperCase()
+  $('copy_reset_day').value = String(resetDay)
+  $('copy_rx_correction').value = hasCorrectionValue(server?.rx_correction) ? String(server.rx_correction) : '0'
+  $('copy_tx_correction').value = hasCorrectionValue(server?.tx_correction) ? String(server.tx_correction) : '0'
+  elements.installCommandText.value = buildInstallCommand(server, elements.copyTargetOs.value || 'linux')
+}
+
+async function openCopyModal(server) {
+  await ensureSettingsLoaded()
   state.copyServer = server
   elements.copyModalTitle.textContent = server.name || t('installCommand')
   elements.copyTargetOs.value = 'linux'
-  elements.installCommandText.value = buildInstallCommand(server, 'linux')
+  fillCopyModalFields(server)
   openModal('copyModal')
 }
 
@@ -1192,9 +1231,7 @@ function bindEvents() {
 
   elements.editForm.addEventListener('submit', saveEdit)
   elements.copyTargetOs.addEventListener('change', () => {
-    if (state.copyServer) {
-      elements.installCommandText.value = buildInstallCommand(state.copyServer, elements.copyTargetOs.value)
-    }
+    if (state.copyServer) fillCopyModalFields(state.copyServer)
   })
   elements.copyInstallButton.addEventListener('click', () => copyText(elements.installCommandText.value))
   elements.deleteTargetOs.addEventListener('change', () => {

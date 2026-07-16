@@ -487,8 +487,15 @@
 
 .settings-stack {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-  max-width: 980px;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.settings-card-wide,
+.settings-footer {
+  grid-column: 1 / -1;
 }
 
 .settings-card {
@@ -569,7 +576,8 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-  max-width: 980px;
+  width: min(1180px, 100%);
+  margin: 0 auto;
 }
 
 .d1-usage-box {
@@ -700,7 +708,8 @@
   }
 
   .form-grid,
-  .db-grid {
+  .db-grid,
+  .settings-stack {
     grid-template-columns: 1fr;
   }
 

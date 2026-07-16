@@ -8,8 +8,8 @@
     <meta name="theme-color" content="#f8f9fb">
     <title>Admin · CSM-Next</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2317191d'/%3E%3Cpath d='M46 20c-4-4-8-6-14-6-10 0-18 8-18 18s8 18 18 18c6 0 11-2 15-7l-7-6c-2 3-5 4-8 4-5 0-9-4-9-9s4-9 9-9c3 0 6 1 8 4z' fill='white'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="./assets/css/main.css?v=20260716-admin">
-    <link rel="stylesheet" href="./assets/css/admin.css?v=20260716-admin">
+    <link rel="stylesheet" href="./assets/css/main.css?v=20260716-admin3">
+    <link rel="stylesheet" href="./assets/css/admin.css?v=20260716-admin3">
   </head>
   <body class="admin-body">
     <div id="loginView" class="admin-login-view">
@@ -102,7 +102,7 @@
                     <th data-i18n="group">分组</th>
                     <th data-i18n="tags">标签</th>
                     <th data-i18n="note">备注</th>
-                    <th data-i18n="price">账单</th>
+                    <th data-i18n="price">价格</th>
                     <th data-i18n="expire">到期</th>
                     <th data-i18n="traffic">流量</th>
                     <th data-i18n="status">状态</th>
@@ -117,7 +117,7 @@
 
           <section id="tabSettings" class="admin-panel" hidden>
             <form id="settingsForm" class="settings-stack">
-              <article class="settings-card">
+              <article class="settings-card settings-card-wide">
                 <h2 data-i18n="appearance">外观</h2>
                 <div class="form-grid">
                   <label class="form-field"><span data-i18n="siteTitle">站点标题</span><input id="set_site_title" name="site_title" type="text"></label>
@@ -207,10 +207,10 @@
               <article class="settings-card">
                 <h2 data-i18n="pingNodes">Ping 节点</h2>
                 <div class="form-grid">
-                  <label class="form-field"><span data-i18n="customCt">电信</span><input id="set_custom_ct" type="text" placeholder="gd-ct-dualstack.ip.zstaticcdn.com"></label>
-                  <label class="form-field"><span data-i18n="customCu">联通</span><input id="set_custom_cu" type="text" placeholder="gd-cu-dualstack.ip.zstaticcdn.com"></label>
-                  <label class="form-field"><span data-i18n="customCm">移动</span><input id="set_custom_cm" type="text" placeholder="gd-cm-dualstack.ip.zstaticcdn.com"></label>
-                  <label class="form-field"><span data-i18n="customBd">备用</span><input id="set_custom_bd" type="text" placeholder="lf3-ips.zstaticcdn.com"></label>
+                  <label class="form-field"><span data-i18n="customCt">电信</span><input id="set_custom_ct" type="text"></label>
+                  <label class="form-field"><span data-i18n="customCu">联通</span><input id="set_custom_cu" type="text"></label>
+                  <label class="form-field"><span data-i18n="customCm">移动</span><input id="set_custom_cm" type="text"></label>
+                  <label class="form-field"><span data-i18n="customBd">备用</span><input id="set_custom_bd" type="text"></label>
                 </div>
               </article>
 
@@ -280,10 +280,10 @@
               <span data-i18n="pingMode">Ping 模式</span>
               <select id="edit_ping_mode"><option value="http">HTTP</option><option value="tcp">TCP</option></select>
             </label>
-            <label class="form-field"><span data-i18n="customCt">电信节点</span><input id="edit_custom_ct" type="text"></label>
-            <label class="form-field"><span data-i18n="customCu">联通节点</span><input id="edit_custom_cu" type="text"></label>
-            <label class="form-field"><span data-i18n="customCm">移动节点</span><input id="edit_custom_cm" type="text"></label>
-            <label class="form-field"><span data-i18n="customBd">备用节点</span><input id="edit_custom_bd" type="text"></label>
+            <label class="form-field"><span data-i18n="customCt">中国电信测试节点</span><input id="edit_custom_ct" type="text"></label>
+            <label class="form-field"><span data-i18n="customCu">中国联通测试节点</span><input id="edit_custom_cu" type="text"></label>
+            <label class="form-field"><span data-i18n="customCm">中国移动测试节点</span><input id="edit_custom_cm" type="text"></label>
+            <label class="form-field"><span data-i18n="customBd">BD测试节点</span><input id="edit_custom_bd" type="text"></label>
             <label class="form-field"><span data-i18n="rxCorrection">下行校正 (GB)</span><input id="edit_rx_correction" type="number" min="0" step="0.1"></label>
             <label class="form-field"><span data-i18n="txCorrection">上行校正 (GB)</span><input id="edit_tx_correction" type="number" min="0" step="0.1"></label>
             <label class="check-item form-field-full"><input id="edit_is_hidden" type="checkbox"><span data-i18n="hideFromPublic">对未登录用户隐藏</span></label>
@@ -298,26 +298,38 @@
     </div>
 
     <div id="copyModal" class="modal-backdrop" hidden>
-      <section class="admin-modal admin-modal-sm" role="dialog" aria-modal="true">
+      <section class="admin-modal" role="dialog" aria-modal="true">
         <header class="admin-modal-header">
           <h2 id="copyModalTitle">Install</h2>
           <button type="button" class="icon-button modal-close" data-close="copyModal" aria-label="Close">✕</button>
         </header>
         <div class="admin-modal-body">
-          <label class="form-field">
-            <span data-i18n="targetOs">目标系统</span>
-            <select id="copyTargetOs">
-              <option value="linux">Linux</option>
-              <option value="alpine">Alpine</option>
-              <option value="openwrt">OpenWrt</option>
-              <option value="mac">macOS</option>
-              <option value="windows">Windows</option>
-            </select>
-          </label>
-          <label class="form-field">
-            <span data-i18n="installCommand">安装命令</span>
-            <textarea id="installCommandText" class="cmd-box" rows="4" readonly></textarea>
-          </label>
+          <div class="form-grid">
+            <label class="form-field form-field-full">
+              <span data-i18n="targetOs">目标系统</span>
+              <select id="copyTargetOs">
+                <option value="linux">Linux (Ubuntu/Debian/CentOS)</option>
+                <option value="alpine">Alpine Linux</option>
+                <option value="openwrt">OpenWrt / LEDE / ImmortalWrt</option>
+                <option value="mac">macOS (Intel / Apple Silicon)</option>
+                <option value="windows">Windows</option>
+              </select>
+            </label>
+            <label class="form-field"><span data-i18n="customCt">中国电信测试节点</span><input id="copy_custom_ct" type="text" readonly></label>
+            <label class="form-field"><span data-i18n="customCu">中国联通测试节点</span><input id="copy_custom_cu" type="text" readonly></label>
+            <label class="form-field"><span data-i18n="customCm">中国移动测试节点</span><input id="copy_custom_cm" type="text" readonly></label>
+            <label class="form-field"><span data-i18n="customBd">BD测试节点</span><input id="copy_custom_bd" type="text" readonly></label>
+            <label class="form-field"><span data-i18n="collectInterval">采集间隔（秒）</span><input id="copy_collect_interval" type="text" readonly></label>
+            <label class="form-field"><span data-i18n="reportInterval">上报间隔（秒）</span><input id="copy_report_interval" type="text" readonly></label>
+            <label class="form-field"><span data-i18n="pingMode">Ping 方式</span><input id="copy_ping_mode" type="text" readonly></label>
+            <label class="form-field"><span data-i18n="trafficResetDay">流量重置日</span><input id="copy_reset_day" type="text" readonly></label>
+            <label class="form-field"><span data-i18n="rxCorrection">下行流量校正 (GB)</span><input id="copy_rx_correction" type="text" readonly></label>
+            <label class="form-field"><span data-i18n="txCorrection">上行流量校正 (GB)</span><input id="copy_tx_correction" type="text" readonly></label>
+            <label class="form-field form-field-full">
+              <span data-i18n="installCommandHint">复制安装命令，在目标服务器上执行即可完成探针部署</span>
+              <textarea id="installCommandText" class="cmd-box" rows="3" readonly></textarea>
+            </label>
+          </div>
           <div class="admin-modal-footer">
             <button type="button" class="admin-btn" data-close="copyModal" data-i18n="cancel">取消</button>
             <button id="copyInstallButton" type="button" class="admin-btn admin-btn-primary" data-i18n="copy">复制</button>
@@ -375,6 +387,6 @@
 
     <div id="sidebarBackdrop" class="admin-sidebar-backdrop" hidden></div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./assets/js/admin.js?v=20260716-admin"></script>
+    <script type="module" src="./assets/js/admin.js?v=20260716-admin3"></script>
   </body>
 </html>
