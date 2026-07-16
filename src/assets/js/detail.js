@@ -12,7 +12,7 @@ const translations = {
     loginRequired: '超过 1 小时的历史数据需要登录。主题与原后台域名不同，登录状态不会自动共享，请在当前站点登录一次。',
     loginTitle: '登录后查看长历史',
     loginMessage: 'JWT 保存在浏览器当前域名下。原管理端登录不会自动穿透到本主题，请在此输入账号密码。',
-    username: '用户名', password: '密码', login: '登录', cancel: '取消', openAdmin: '打开原管理端',
+    username: '用户名', password: '密码', login: '登录', cancel: '取消', openAdmin: '打开管理后台',
     loginSuccess: '登录成功，正在载入历史数据', loginFailed: '登录失败，请检查账号密码',
     loginMissing: '请输入用户名和密码', loginTurnstile: '请先完成安全验证',
     historyFailed: '历史数据载入失败', current: '当前', telecom: '电信 TCP', unicom: '联通 TCP', mobile: '移动 TCP', backup: '备用线路',
@@ -29,7 +29,7 @@ const translations = {
     loginRequired: 'History beyond one hour requires login. Because this theme uses a different domain, the original Admin session is not shared—sign in here once.',
     loginTitle: 'Sign in for long history',
     loginMessage: 'JWT tokens are scoped to the current browser origin. Logging into the original Admin panel does not transfer credentials here.',
-    username: 'Username', password: 'Password', login: 'Sign in', cancel: 'Cancel', openAdmin: 'Open original Admin',
+    username: 'Username', password: 'Password', login: 'Sign in', cancel: 'Cancel', openAdmin: 'Open admin',
     loginSuccess: 'Signed in. Loading history…', loginFailed: 'Sign-in failed. Check username and password.',
     loginMissing: 'Enter username and password', loginTurnstile: 'Complete the security check first',
     historyFailed: 'Failed to load history', current: 'Current', telecom: 'Telecom TCP', unicom: 'Unicom TCP', mobile: 'Mobile TCP', backup: 'Backup',
@@ -298,7 +298,12 @@ function showLoginError(message = '') {
 
 function openLoginModal(hours = state.pendingHistoryHours) {
   state.pendingHistoryHours = hours
-  if (elements.loginAdminLink) elements.loginAdminLink.href = `${state.site?.base || location.origin}/#/admin`
+  if (elements.loginAdminLink) {
+    const admin = new URL('./admin.html', location.href)
+    if (state.preview) admin.searchParams.set('preview', '1')
+    if (Number.isFinite(state.siteIndex)) admin.searchParams.set('site', String(state.siteIndex))
+    elements.loginAdminLink.href = admin.href
+  }
   if (elements.loginMessage) elements.loginMessage.textContent = t('loginMessage')
   showLoginError('')
   if (elements.loginModal) elements.loginModal.hidden = false
@@ -384,7 +389,10 @@ function applyConfig() {
   const title = state.config.title || 'CF-Server-Monitor'
   elements.brandTitle.textContent = title
   document.title = state.server ? `${state.server.name} · ${title}` : title
-  const adminHref = `${state.site?.base || location.origin}/#/admin`
+  const admin = new URL('./admin.html', location.href)
+  if (state.preview) admin.searchParams.set('preview', '1')
+  if (Number.isFinite(state.siteIndex)) admin.searchParams.set('site', String(state.siteIndex))
+  const adminHref = admin.href
   elements.adminLink.href = adminHref
   if (elements.loginAdminLink) elements.loginAdminLink.href = adminHref
   if (state.preview) document.querySelectorAll('a[href="./"]').forEach(link => { link.href = './?preview=1' })

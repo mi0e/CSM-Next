@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="description" content="CSM-Next 管理后台">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f8f9fb">
+    <title>Admin · CSM-Next</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2317191d'/%3E%3Cpath d='M46 20c-4-4-8-6-14-6-10 0-18 8-18 18s8 18 18 18c6 0 11-2 15-7l-7-6c-2 3-5 4-8 4-5 0-9-4-9-9s4-9 9-9c3 0 6 1 8 4z' fill='white'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="./assets/css/main.css?v=20260716-admin">
+    <link rel="stylesheet" href="./assets/css/admin.css?v=20260716-admin">
+  </head>
+  <body class="admin-body">
+    <div id="loginView" class="admin-login-view">
+      <section class="admin-login-card" role="dialog" aria-labelledby="loginTitle">
+        <span class="brand-mark" aria-hidden="true">C</span>
+        <h1 id="loginTitle" data-i18n="loginTitle">管理后台登录</h1>
+        <p data-i18n="loginMessage">JWT 保存在当前站点域名下，与公开页共用登录状态。</p>
+        <form id="loginForm" class="login-form" autocomplete="on">
+          <label class="login-field">
+            <span data-i18n="username">用户名</span>
+            <input id="loginUsername" name="username" type="text" autocomplete="username" required>
+          </label>
+          <label class="login-field">
+            <span data-i18n="password">密码</span>
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+          </label>
+          <div id="loginTurnstile" class="turnstile-widget" hidden></div>
+          <p id="loginError" class="login-error" hidden></p>
+          <div class="login-actions">
+            <a class="admin-text-link" href="./" data-i18n="backHome">返回前台</a>
+            <button id="loginSubmit" type="submit" data-i18n="login">登录</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="appView" class="admin-app" hidden>
+      <aside class="admin-sidebar" aria-label="管理导航">
+        <div class="admin-sidebar-brand">
+          <span class="brand-mark" aria-hidden="true">C</span>
+          <div>
+            <strong id="brandTitle">CSM-Next</strong>
+            <small data-i18n="adminPanel">管理后台</small>
+          </div>
+        </div>
+
+        <nav class="admin-nav">
+          <button type="button" class="admin-nav-item is-active" data-tab="servers" data-i18n="servers">服务器</button>
+          <button type="button" class="admin-nav-item" data-tab="settings" data-i18n="settings">设置</button>
+          <button type="button" class="admin-nav-item" data-tab="database" data-i18n="database">数据库</button>
+        </nav>
+
+        <div class="admin-sidebar-footer">
+          <a class="admin-nav-item admin-nav-link" href="./" data-i18n="backHome">返回前台</a>
+        </div>
+      </aside>
+
+      <div class="admin-main">
+        <header class="admin-topbar">
+          <div class="admin-topbar-left">
+            <button id="sidebarToggle" class="icon-button admin-menu-btn" type="button" data-i18n-title="menu" title="菜单" aria-label="菜单">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+            </button>
+            <h1 id="pageTitle" data-i18n="nodeList">节点列表</h1>
+          </div>
+          <div class="admin-topbar-actions">
+            <select id="siteSelect" class="admin-select" hidden aria-label="API site"></select>
+            <button id="themeButton" class="icon-button" type="button" data-i18n-title="theme" title="切换主题">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-1.1-.9-2-2-2h-2.1a2 2 0 0 1-1.5-3.3l.3-.4A2 2 0 0 0 14.1 3H12Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="7.8" cy="15" r="1"/></svg>
+            </button>
+            <button id="languageButton" class="icon-button language-button" type="button" data-i18n-title="language" title="切换语言">
+              <span>文</span><small>A</small>
+            </button>
+            <button id="logoutButton" class="admin-btn admin-btn-ghost" type="button" data-i18n="logout">退出</button>
+          </div>
+        </header>
+
+        <main class="admin-content">
+          <section id="tabServers" class="admin-panel is-active">
+            <div class="admin-toolbar">
+              <div class="admin-toolbar-left">
+                <input id="serverSearch" class="admin-input" type="search" data-i18n-placeholder="searchServers" placeholder="查找服务器">
+                <input id="newServerName" class="admin-input" type="text" data-i18n-placeholder="serverName" placeholder="节点名称">
+                <input id="newServerGroup" class="admin-input admin-input-sm" type="text" list="groupList" data-i18n-placeholder="groupName" placeholder="分组">
+                <datalist id="groupList"></datalist>
+              </div>
+              <div class="admin-toolbar-right">
+                <button id="batchDeleteButton" class="admin-btn admin-btn-danger" type="button" data-i18n="batchDelete">批量删除</button>
+                <button id="addServerButton" class="admin-btn admin-btn-primary" type="button" data-i18n="addServer">+ 添加节点</button>
+              </div>
+            </div>
+
+            <div class="admin-table-shell">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th class="col-drag" title="Drag"></th>
+                    <th class="col-check"><input id="selectAll" type="checkbox" aria-label="Select all"></th>
+                    <th data-i18n="name">名称</th>
+                    <th data-i18n="group">分组</th>
+                    <th data-i18n="tags">标签</th>
+                    <th data-i18n="note">备注</th>
+                    <th data-i18n="price">账单</th>
+                    <th data-i18n="expire">到期</th>
+                    <th data-i18n="traffic">流量</th>
+                    <th data-i18n="status">状态</th>
+                    <th data-i18n="actions">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="serverTableBody"></tbody>
+              </table>
+            </div>
+            <p id="serversEmpty" class="admin-empty" hidden data-i18n="noServers">暂无服务器，请先添加节点。</p>
+          </section>
+
+          <section id="tabSettings" class="admin-panel" hidden>
+            <form id="settingsForm" class="settings-stack">
+              <article class="settings-card">
+                <h2 data-i18n="appearance">外观</h2>
+                <div class="form-grid">
+                  <label class="form-field"><span data-i18n="siteTitle">站点标题</span><input id="set_site_title" name="site_title" type="text"></label>
+                  <label class="form-field"><span data-i18n="bgImage">背景图 URL</span><input id="set_custom_bg" name="custom_bg" type="url" placeholder="https://..."></label>
+                  <label class="form-field form-field-full"><span data-i18n="customHead">自定义 &lt;head&gt;</span><textarea id="set_custom_head" name="custom_head" rows="3"></textarea></label>
+                  <label class="form-field form-field-full"><span data-i18n="customScript">自定义脚本</span><textarea id="set_custom_script" name="custom_script" rows="3"></textarea></label>
+                  <label class="form-field"><span data-i18n="cspStatic">CSP 静态域名</span><input id="set_csp_static" name="csp_static" type="text" placeholder="https://cdn.jsdelivr.net"></label>
+                  <label class="form-field"><span data-i18n="cspApi">CSP API 域名</span><input id="set_csp_api" name="csp_api" type="text" placeholder="https://api.example.com"></label>
+                </div>
+              </article>
+
+              <article class="settings-card">
+                <h2 data-i18n="displayOptions">显示选项</h2>
+                <div class="checkbox-grid">
+                  <label class="check-item"><input id="set_is_public" type="checkbox"><span data-i18n="publicAccess">公开访问</span></label>
+                  <label class="check-item"><input id="set_show_price" type="checkbox"><span data-i18n="showPrice">显示价格</span></label>
+                  <label class="check-item"><input id="set_show_expire" type="checkbox"><span data-i18n="showExpire">显示到期</span></label>
+                  <label class="check-item"><input id="set_show_tf" type="checkbox"><span data-i18n="showTf">显示流量配额</span></label>
+                  <label class="check-item"><input id="set_show_time" type="checkbox"><span data-i18n="showTime">显示时间</span></label>
+                  <label class="check-item"><input id="set_show_long_history" type="checkbox"><span data-i18n="showLongHistory">显示更长历史</span></label>
+                </div>
+              </article>
+
+              <article class="settings-card">
+                <h2 data-i18n="notifications">通知</h2>
+                <div class="form-grid">
+                  <label class="form-field">
+                    <span data-i18n="offlineAlert">离线告警</span>
+                    <select id="set_tg_notify" name="tg_notify">
+                      <option value="false" data-i18n="disabled">关闭</option>
+                      <option value="true" data-i18n="notifyOffline">离线 5 分钟后通知</option>
+                    </select>
+                  </label>
+                  <label class="form-field">
+                    <span data-i18n="expireReminder">到期提醒</span>
+                    <select id="set_expire_reminder" name="expire_reminder">
+                      <option value="false" data-i18n="disabled">关闭</option>
+                      <option value="true" data-i18n="notifyExpire">到期前 7 天提醒</option>
+                    </select>
+                  </label>
+                  <label class="form-field"><span data-i18n="telegramToken">通知 Token / Webhook</span><input id="set_tg_bot_token" name="tg_bot_token" type="password" autocomplete="off"></label>
+                  <label class="form-field"><span data-i18n="chatId">Chat ID</span><input id="set_tg_chat_id" name="tg_chat_id" type="password" autocomplete="off"></label>
+                </div>
+                <div class="settings-actions">
+                  <button id="testNotifyButton" class="admin-btn" type="button" data-i18n="sendTestNotification">发送测试通知</button>
+                </div>
+              </article>
+
+              <article class="settings-card">
+                <h2 data-i18n="securitySettings">安全设置</h2>
+                <div class="checkbox-grid">
+                  <label class="check-item"><input id="set_turnstile_enabled" type="checkbox"><span data-i18n="enableTurnstile">启用 Turnstile（公开页）</span></label>
+                  <label class="check-item"><input id="set_turnstile_login_enabled" type="checkbox"><span data-i18n="enableTurnstileLogin">启用 Turnstile（登录）</span></label>
+                </div>
+                <div class="form-grid">
+                  <label class="form-field"><span data-i18n="turnstileSiteKey">Turnstile Site Key</span><input id="set_turnstile_site_key" type="text" autocomplete="off"></label>
+                  <label class="form-field"><span data-i18n="turnstileSecretKey">Turnstile Secret Key</span><input id="set_turnstile_secret_key" type="password" autocomplete="off"></label>
+                  <label class="form-field form-field-full"><span data-i18n="jwtSecret">JWT Secret</span><input id="set_jwt_secret" type="password" autocomplete="off" placeholder="留空则不修改"></label>
+                </div>
+              </article>
+
+              <article class="settings-card">
+                <h2 data-i18n="cloudflareSettings">Cloudflare</h2>
+                <div class="form-grid">
+                  <label class="form-field"><span data-i18n="cloudflareAccountId">Account ID</span><input id="set_cloudflare_account_id" type="text" autocomplete="off"></label>
+                  <label class="form-field"><span>API Token</span><input id="set_cloudflare_token" type="password" autocomplete="off"></label>
+                </div>
+                <div class="settings-actions">
+                  <button id="queryD1Button" class="admin-btn" type="button" data-i18n="queryD1Quota">查询 D1 / Workers 用量</button>
+                </div>
+                <div id="d1UsageBox" class="d1-usage-box" hidden></div>
+              </article>
+
+              <article class="settings-card">
+                <h2 data-i18n="adminLoginSettings">管理员账号</h2>
+                <div class="form-grid">
+                  <label class="form-field"><span data-i18n="username">用户名</span><input id="set_username" type="text" autocomplete="off"></label>
+                </div>
+                <button id="togglePasswordChange" class="admin-btn admin-btn-ghost" type="button" data-i18n="changePassword">修改密码</button>
+                <div id="passwordChangeFields" class="form-grid" hidden>
+                  <label class="form-field"><span data-i18n="password">新密码</span><input id="set_password" type="password" autocomplete="new-password"></label>
+                  <label class="form-field"><span data-i18n="confirmPassword">确认密码</span><input id="set_confirm_password" type="password" autocomplete="new-password"></label>
+                </div>
+                <p class="form-hint" data-i18n="apiSecretTip">API_SECRET 仍使用 Worker 环境变量，不在此修改。</p>
+              </article>
+
+              <article class="settings-card">
+                <h2 data-i18n="pingNodes">Ping 节点</h2>
+                <div class="form-grid">
+                  <label class="form-field"><span data-i18n="customCt">电信</span><input id="set_custom_ct" type="text" placeholder="gd-ct-dualstack.ip.zstaticcdn.com"></label>
+                  <label class="form-field"><span data-i18n="customCu">联通</span><input id="set_custom_cu" type="text" placeholder="gd-cu-dualstack.ip.zstaticcdn.com"></label>
+                  <label class="form-field"><span data-i18n="customCm">移动</span><input id="set_custom_cm" type="text" placeholder="gd-cm-dualstack.ip.zstaticcdn.com"></label>
+                  <label class="form-field"><span data-i18n="customBd">备用</span><input id="set_custom_bd" type="text" placeholder="lf3-ips.zstaticcdn.com"></label>
+                </div>
+              </article>
+
+              <div class="settings-footer">
+                <p id="settingsError" class="login-error" hidden></p>
+                <button id="saveSettingsButton" class="admin-btn admin-btn-primary admin-btn-lg" type="submit" data-i18n="saveConfig">保存配置</button>
+              </div>
+            </form>
+          </section>
+
+          <section id="tabDatabase" class="admin-panel" hidden>
+            <div class="db-grid">
+              <article class="settings-card">
+                <h2 data-i18n="upgradeDatabase">升级数据库</h2>
+                <p class="form-hint" data-i18n="upgradeDesc">将数据库结构迁移到最新版本。不会改动主题侧逻辑。</p>
+                <button id="upgradeDbButton" class="admin-btn admin-btn-primary" type="button" data-i18n="upgradeDatabase">升级数据库</button>
+              </article>
+              <article class="settings-card settings-card-danger">
+                <h2 data-i18n="clearHistory">清空历史数据</h2>
+                <p class="form-hint" data-i18n="clearHistoryDesc">删除全部监控历史，保留服务器列表与设置。此操作不可恢复。</p>
+                <button id="clearHistoryButton" class="admin-btn admin-btn-danger" type="button" data-i18n="clearHistory">清空历史数据</button>
+              </article>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div id="editModal" class="modal-backdrop" hidden>
+      <section class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+        <header class="admin-modal-header">
+          <h2 id="editModalTitle" data-i18n="editServer">编辑节点</h2>
+          <button type="button" class="icon-button modal-close" data-close="editModal" aria-label="Close">✕</button>
+        </header>
+        <form id="editForm" class="admin-modal-body">
+          <input id="edit_id" type="hidden">
+          <div class="form-grid">
+            <label class="form-field"><span data-i18n="name">名称</span><input id="edit_name" required type="text"></label>
+            <label class="form-field"><span data-i18n="group">分组</span><input id="edit_server_group" type="text"></label>
+            <label class="form-field"><span data-i18n="tags">标签</span><input id="edit_tags" type="text" data-i18n-placeholder="tagsPlaceholder" placeholder="逗号分隔"></label>
+            <label class="form-field form-field-full"><span data-i18n="note">备注</span><textarea id="edit_note" rows="2" data-i18n-placeholder="notePlaceholder" placeholder="仅后台可见"></textarea></label>
+            <label class="form-field"><span data-i18n="price">价格</span><input id="edit_price" type="text"></label>
+            <label class="form-field"><span data-i18n="expire">到期日</span><input id="edit_expire_date" type="date"></label>
+            <label class="form-field"><span data-i18n="trafficLimit">流量限额 (GB)</span><input id="edit_traffic_limit" type="number" min="0" step="1"></label>
+            <label class="form-field">
+              <span data-i18n="trafficCalcType">流量计算</span>
+              <select id="edit_traffic_calc_type">
+                <option value="total" data-i18n="trafficCalcTotal">总计</option>
+                <option value="ul" data-i18n="trafficCalcUl">仅上传</option>
+                <option value="dl" data-i18n="trafficCalcDl">仅下载</option>
+              </select>
+            </label>
+            <label class="form-field"><span data-i18n="trafficResetDay">重置日</span><input id="edit_reset_day" type="number" min="0" max="31"></label>
+            <label class="form-field">
+              <span data-i18n="collectInterval">采集间隔</span>
+              <select id="edit_collect_interval">
+                <option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="5">5</option><option value="10">10</option>
+              </select>
+            </label>
+            <label class="form-field">
+              <span data-i18n="reportInterval">上报间隔</span>
+              <select id="edit_report_interval">
+                <option value="30">30</option><option value="60">60</option><option value="120">120</option><option value="180">180</option>
+              </select>
+            </label>
+            <label class="form-field">
+              <span data-i18n="pingMode">Ping 模式</span>
+              <select id="edit_ping_mode"><option value="http">HTTP</option><option value="tcp">TCP</option></select>
+            </label>
+            <label class="form-field"><span data-i18n="customCt">电信节点</span><input id="edit_custom_ct" type="text"></label>
+            <label class="form-field"><span data-i18n="customCu">联通节点</span><input id="edit_custom_cu" type="text"></label>
+            <label class="form-field"><span data-i18n="customCm">移动节点</span><input id="edit_custom_cm" type="text"></label>
+            <label class="form-field"><span data-i18n="customBd">备用节点</span><input id="edit_custom_bd" type="text"></label>
+            <label class="form-field"><span data-i18n="rxCorrection">下行校正 (GB)</span><input id="edit_rx_correction" type="number" min="0" step="0.1"></label>
+            <label class="form-field"><span data-i18n="txCorrection">上行校正 (GB)</span><input id="edit_tx_correction" type="number" min="0" step="0.1"></label>
+            <label class="check-item form-field-full"><input id="edit_is_hidden" type="checkbox"><span data-i18n="hideFromPublic">对未登录用户隐藏</span></label>
+            <label id="offlineNotifyWrap" class="check-item form-field-full" hidden><input id="edit_offline_notify_disabled" type="checkbox"><span data-i18n="disableOfflineNotify">禁用该节点离线通知</span></label>
+          </div>
+          <div class="admin-modal-footer">
+            <button type="button" class="admin-btn" data-close="editModal" data-i18n="cancel">取消</button>
+            <button type="submit" class="admin-btn admin-btn-primary" data-i18n="save">保存</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="copyModal" class="modal-backdrop" hidden>
+      <section class="admin-modal admin-modal-sm" role="dialog" aria-modal="true">
+        <header class="admin-modal-header">
+          <h2 id="copyModalTitle">Install</h2>
+          <button type="button" class="icon-button modal-close" data-close="copyModal" aria-label="Close">✕</button>
+        </header>
+        <div class="admin-modal-body">
+          <label class="form-field">
+            <span data-i18n="targetOs">目标系统</span>
+            <select id="copyTargetOs">
+              <option value="linux">Linux</option>
+              <option value="alpine">Alpine</option>
+              <option value="openwrt">OpenWrt</option>
+              <option value="mac">macOS</option>
+              <option value="windows">Windows</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span data-i18n="installCommand">安装命令</span>
+            <textarea id="installCommandText" class="cmd-box" rows="4" readonly></textarea>
+          </label>
+          <div class="admin-modal-footer">
+            <button type="button" class="admin-btn" data-close="copyModal" data-i18n="cancel">取消</button>
+            <button id="copyInstallButton" type="button" class="admin-btn admin-btn-primary" data-i18n="copy">复制</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="deleteModal" class="modal-backdrop" hidden>
+      <section class="admin-modal admin-modal-sm" role="dialog" aria-modal="true">
+        <header class="admin-modal-header">
+          <h2 data-i18n="confirmDelete">确认删除</h2>
+          <button type="button" class="icon-button modal-close" data-close="deleteModal" aria-label="Close">✕</button>
+        </header>
+        <div class="admin-modal-body">
+          <p id="deleteMessage" class="form-hint"></p>
+          <label class="form-field">
+            <span data-i18n="targetOs">目标系统</span>
+            <select id="deleteTargetOs">
+              <option value="linux">Linux</option>
+              <option value="alpine">Alpine</option>
+              <option value="openwrt">OpenWrt</option>
+              <option value="mac">macOS</option>
+              <option value="windows">Windows</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span data-i18n="uninstallCommand">卸载命令</span>
+            <textarea id="uninstallCommandText" class="cmd-box" rows="3" readonly></textarea>
+          </label>
+          <div class="admin-modal-footer">
+            <button type="button" class="admin-btn" data-close="deleteModal" data-i18n="cancel">取消</button>
+            <button id="copyUninstallButton" type="button" class="admin-btn" data-i18n="copy">复制卸载命令</button>
+            <button id="confirmDeleteButton" type="button" class="admin-btn admin-btn-danger" data-i18n="confirmDelete">确认删除</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="confirmModal" class="modal-backdrop" hidden>
+      <section class="admin-modal admin-modal-sm" role="dialog" aria-modal="true">
+        <header class="admin-modal-header">
+          <h2 id="confirmTitle">Confirm</h2>
+          <button type="button" class="icon-button modal-close" data-close="confirmModal" aria-label="Close">✕</button>
+        </header>
+        <div class="admin-modal-body">
+          <p id="confirmMessage" class="form-hint"></p>
+          <div class="admin-modal-footer">
+            <button type="button" class="admin-btn" data-close="confirmModal" data-i18n="cancel">取消</button>
+            <button id="confirmActionButton" type="button" class="admin-btn admin-btn-danger" data-i18n="confirm">确认</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="sidebarBackdrop" class="admin-sidebar-backdrop" hidden></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./assets/js/admin.js?v=20260716-admin"></script>
+  </body>
+</html>

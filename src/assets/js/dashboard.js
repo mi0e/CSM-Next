@@ -357,8 +357,9 @@ function detailUrl(server) {
 function adminUrl() {
   const configured = state.config.adminUrl
   if (configured) return configured
-  const base = state.sites[0]?.base || location.origin
-  return `${base}/#/admin`
+  const url = new URL('./admin.html', location.href)
+  if (state.preview) url.searchParams.set('preview', '1')
+  return url.href
 }
 
 function showToast(message) {

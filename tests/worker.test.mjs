@@ -16,9 +16,12 @@ const env = {
 test('Worker maps public page routes to source HTML', async () => {
   const index = await worker.fetch(new Request('https://theme.example/'), env)
   const detail = await worker.fetch(new Request('https://theme.example/detail.html?id=node-1'), env)
+  const admin = await worker.fetch(new Request('https://theme.example/admin'), env)
 
   assert.equal(await index.text(), '/index.html')
   assert.equal(await detail.text(), '/detail.html')
+  assert.equal(admin.status, 308)
+  assert.equal(admin.headers.get('location'), 'https://theme.example/admin.html')
 })
 
 test('Worker redirects legacy pages paths to root routes', async () => {

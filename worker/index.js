@@ -1,10 +1,13 @@
 const legacyRoutes = new Map([
   ['/detail', '/detail.html'],
+  ['/admin', '/admin.html'],
   ['/pages', '/'],
   ['/pages/', '/'],
   ['/pages/index.html', '/'],
   ['/pages/detail', '/detail.html'],
-  ['/pages/detail.html', '/detail.html']
+  ['/pages/detail.html', '/detail.html'],
+  ['/pages/admin', '/admin.html'],
+  ['/pages/admin.html', '/admin.html']
 ])
 
 function apiBases(value) {

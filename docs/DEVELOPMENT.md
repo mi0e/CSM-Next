@@ -31,12 +31,14 @@ npm run cf:deploy # 部署到 Cloudflare Workers
 
 ```text
 http://127.0.0.1:4173/?preview=1
+http://127.0.0.1:4173/admin.html?preview=1
 ```
 
 ## 修改位置
 
 - 仪表盘：`src/index.html`、`src/assets/js/dashboard.js`
 - 详情页：`src/detail.html`、`src/assets/js/detail.js`
+- 管理后台：`src/admin.html`、`src/assets/js/admin.js`、`src/assets/css/admin.css`
 - 公共样式：`src/assets/css/main.css`
 - 详情样式：`src/assets/css/detail.css`
 - Worker 路由：`worker/index.js`、`wrangler.jsonc`
