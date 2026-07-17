@@ -1,11 +1,12 @@
 import { escapeHtml } from '../shared/dom.js'
 import {
-  state, elements, $, t, truthy, showToast, showSettingsError
+  state, elements, $, t, truthy, showToast, showSettingsError, updateBrandTitle
 } from './context.js'
 import { adminApi } from './api.js'
 
 export function fillSettingsForm(settings) {
   state.settings = settings
+  updateBrandTitle()
   $('set_site_title').value = settings.site_title || ''
   $('set_custom_bg').value = settings.custom_bg || ''
   $('set_custom_head').value = settings.custom_head || ''

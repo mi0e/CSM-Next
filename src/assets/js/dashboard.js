@@ -6,7 +6,14 @@ import {
   getLoginTurnstileToken, loginTurnstileRequired, loginWithCredentials,
   removeLoginTurnstile, renderLoginTurnstile
 } from './shared/login.js'
-import { applyBackgroundImage, joinUrl, normalizeBase } from './shared/url.js'
+import {
+  applyThemeAppearance, loadThemeSettings, saveThemeSettings, uploadThemeBackground
+} from './shared/theme.js'
+import {
+  normalizeThemeSettings, validateThemeSettings
+} from './shared/theme-settings.js'
+import { resolveSiteTitle } from './shared/title.js'
+import { joinUrl, normalizeBase } from './shared/url.js'
 
 const ONLINE_THRESHOLD = 5 * 60 * 1000
 const DEFAULT_REFRESH_INTERVAL = 60 * 1000
@@ -36,6 +43,21 @@ const translations = {
     theme: '切换明暗主题',
     language: 'Switch to English',
     admin: '管理后台',
+    themeCustomize: '主题自定义', themeExperimental: 'KV 持久化', close: '关闭',
+    themeLoginRequired: '登录授权后才可修改并保存全站外观。',
+    themeAuthorized: '身份已验证，修改将保存到全站主题。', themePreviewAuth: '预览模式：修改仅在当前页面生效。',
+    themeBackground: '背景图片', themeBackgroundHint: '仅允许 HTTPS 图片地址；留空表示不使用背景图。',
+    themeBackgroundUpload: '上传本地图片', themeUploadHint: '支持 JPG、PNG、WebP、GIF、AVIF，最大 2 MB；图片与设置共用一个 KV。',
+    themeOpacity: '界面透明度', themeOpacityHint: '同时调整卡片、顶部栏和背景遮罩透明度。',
+    themeCustomCss: '自定义 CSS', themeCssHint: '不允许 @import、url() 或脚本；外部资源请使用背景图片设置。',
+    restoreDefaults: '恢复默认', saveTheme: '保存主题', themeSaved: '主题设置已保存',
+    themePreviewSaved: '预览样式已应用，本地预览不会写入 KV', themeSaveFailed: '主题设置保存失败',
+    themeBackgroundInvalid: '背景图片必须是完整的 HTTPS 地址',
+    themeOpacityInvalid: '界面透明度必须在 20% 到 100% 之间',
+    themeCssUnsafe: '自定义 CSS 不能加载外部资源或包含危险指令',
+    themeFileInvalid: '请选择 2 MB 以内的 JPG、PNG、WebP、GIF 或 AVIF 图片',
+    themeUploadPreview: '本地预览不保存上传文件，请部署 Worker 后测试上传',
+    themeKvHint: '设置保存在 CSM-Next 独立 KV，不写入上游 D1。',
     authorize: '登录授权',
     loginTitle: '登录授权',
     loginMessage: '登录后可查看非公开站点、隐藏节点和长历史数据。',
@@ -110,6 +132,21 @@ const translations = {
     theme: 'Toggle color theme',
     language: '切换到中文',
     admin: 'Admin',
+    themeCustomize: 'Customize theme', themeExperimental: 'KV persisted', close: 'Close',
+    themeLoginRequired: 'Sign in before changing and saving the site-wide appearance.',
+    themeAuthorized: 'Authorized. Changes will be saved for the whole site.', themePreviewAuth: 'Preview mode: changes apply to this page only.',
+    themeBackground: 'Background image', themeBackgroundHint: 'HTTPS image URLs only. Leave empty for no background.',
+    themeBackgroundUpload: 'Upload local image', themeUploadHint: 'JPG, PNG, WebP, GIF, or AVIF up to 2 MB. The image shares the same KV namespace.',
+    themeOpacity: 'Interface opacity', themeOpacityHint: 'Adjusts cards, the top bar, and the background overlay together.',
+    themeCustomCss: 'Custom CSS', themeCssHint: '@import, url(), and scripts are blocked. Use the background field for external images.',
+    restoreDefaults: 'Restore defaults', saveTheme: 'Save theme', themeSaved: 'Theme settings saved',
+    themePreviewSaved: 'Preview styles applied. Local preview does not write to KV.', themeSaveFailed: 'Unable to save theme settings',
+    themeBackgroundInvalid: 'The background image must be a complete HTTPS URL',
+    themeOpacityInvalid: 'Interface opacity must be between 20% and 100%',
+    themeCssUnsafe: 'Custom CSS cannot load external resources or contain unsafe directives',
+    themeFileInvalid: 'Choose a JPG, PNG, WebP, GIF, or AVIF image no larger than 2 MB',
+    themeUploadPreview: 'Local preview cannot persist uploads. Deploy the Worker to test file uploads.',
+    themeKvHint: 'Stored in CSM-Next KV without writing to the upstream D1 database.',
     authorize: 'Authorize',
     loginTitle: 'Sign in',
     loginMessage: 'Sign in to view private sites, hidden nodes, and longer history.',
@@ -194,13 +231,17 @@ const state = {
   loginSiteIndex: 0,
   loginBusy: false,
   loginTurnstileWidgetId: null,
-  unauthorizedSiteIndexes: []
+  unauthorizedSiteIndexes: [],
+  upstreamTitle: '',
+  themeSettings: normalizeThemeSettings(),
+  themeSettingsLoaded: false,
+  themeSettingsBusy: false,
+  themeDrawerOpen: false
 }
 
 const elements = {
   brandTitle: document.querySelector('#brandTitle'),
   siteEyebrow: document.querySelector('#siteEyebrow'),
-  adminLink: document.querySelector('#adminLink'),
   footerAdminLink: document.querySelector('#footerAdminLink'),
   refreshButton: document.querySelector('#refreshButton'),
   themeButton: document.querySelector('#themeButton'),
@@ -246,6 +287,24 @@ const elements = {
   loginLogout: document.querySelector('#loginLogout'),
   loginTurnstile: document.querySelector('#loginTurnstile'),
   loginAdminLink: document.querySelector('#loginAdminLink'),
+  themeSettingsButton: document.querySelector('#themeSettingsButton'),
+  themeDrawer: document.querySelector('#themeDrawer'),
+  themeDrawerBackdrop: document.querySelector('#themeDrawerBackdrop'),
+  themeDrawerClose: document.querySelector('#themeDrawerClose'),
+  themeSettingsAuth: document.querySelector('#themeSettingsAuth'),
+  themeSettingsAuthText: document.querySelector('#themeSettingsAuthText'),
+  themeSettingsLogin: document.querySelector('#themeSettingsLogin'),
+  themeSettingsForm: document.querySelector('#themeSettingsForm'),
+  themeSettingsFields: document.querySelector('#themeSettingsFields'),
+  themeBackgroundImage: document.querySelector('#themeBackgroundImage'),
+  themeBackgroundUpload: document.querySelector('#themeBackgroundUpload'),
+  themePanelOpacity: document.querySelector('#themePanelOpacity'),
+  themeOpacityOutput: document.querySelector('#themeOpacityOutput'),
+  themeCustomCss: document.querySelector('#themeCustomCss'),
+  themeSettingsError: document.querySelector('#themeSettingsError'),
+  themeSettingsReset: document.querySelector('#themeSettingsReset'),
+  themeSettingsSave: document.querySelector('#themeSettingsSave'),
+  themeOriginalAdminLink: document.querySelector('#themeOriginalAdminLink'),
   toast: document.querySelector('#toast'),
   themeColor: document.querySelector('meta[name="theme-color"]')
 }
@@ -421,22 +480,27 @@ function applyTranslations() {
   elements.languageButton.querySelector('span').textContent = state.language === 'zh' ? '文' : 'A'
   elements.languageButton.querySelector('small').textContent = state.language === 'zh' ? 'A' : '文'
   updateAuthButton()
+  updateThemeDrawerAuthState()
   if (elements.loginModal && !elements.loginModal.hidden) updateLoginModalState({ refreshTurnstile: false })
 }
 
 function applyConfig() {
-  const title = state.config.title || 'CF-Server-Monitor'
+  const title = resolveSiteTitle(state.config, state.upstreamTitle)
   document.title = title
   elements.brandTitle.textContent = title
   elements.siteEyebrow.textContent = String(title).toUpperCase()
-  applyBackgroundImage(state.config.backgroundImage)
+  const appearance = state.themeSettingsLoaded
+    ? state.themeSettings
+    : normalizeThemeSettings({}, { backgroundImage: state.config.backgroundImage, panelOpacity: 1 })
+  state.themeSettings = applyThemeAppearance(appearance)
   const link = adminUrl()
-  elements.adminLink.href = link
   elements.footerAdminLink.href = link
   const external = new URL(link, location.href).origin !== location.origin
-  for (const element of [elements.adminLink, elements.footerAdminLink]) {
-    element.target = external ? '_blank' : ''
-    element.rel = external ? 'noopener noreferrer' : ''
+  elements.footerAdminLink.target = external ? '_blank' : ''
+  elements.footerAdminLink.rel = external ? 'noopener noreferrer' : ''
+  const site = themeSettingsAuthSite() || state.sites[0]
+  if (elements.themeOriginalAdminLink) {
+    elements.themeOriginalAdminLink.href = originalAdminUrl(site?.base, location.href)
   }
   elements.authButton.hidden = state.preview
 }
@@ -518,6 +582,8 @@ async function initializeSites() {
       site.configError = error
     }
   }))
+  state.upstreamTitle = state.sites.map(site => site.config?.site_title).find(Boolean) || ''
+  applyConfig()
   updateAuthButton()
 }
 
@@ -634,6 +700,157 @@ function updateAuthButton() {
   const label = authorized ? t('authorizedMessage') : t('authorize')
   elements.authButton.title = label
   elements.authButton.setAttribute('aria-label', label)
+  updateThemeDrawerAuthState()
+}
+
+function themeSettingsAuthSite() {
+  return state.sites.find(site => Boolean(getJwt(site.base))) || null
+}
+
+function canEditThemeSettings() {
+  return state.preview || Boolean(themeSettingsAuthSite())
+}
+
+function setThemeSettingsError(message = '') {
+  if (!elements.themeSettingsError) return
+  elements.themeSettingsError.textContent = message
+  elements.themeSettingsError.hidden = !message
+}
+
+function updateThemeOpacityOutput() {
+  const opacity = Math.round((Number(elements.themePanelOpacity?.value) || 1) * 100)
+  if (elements.themeOpacityOutput) elements.themeOpacityOutput.textContent = `${opacity}%`
+}
+
+function populateThemeSettingsForm() {
+  if (!elements.themeSettingsForm) return
+  elements.themeBackgroundImage.value = state.themeSettings.backgroundImage || ''
+  elements.themeBackgroundUpload.value = ''
+  elements.themePanelOpacity.value = String(state.themeSettings.panelOpacity ?? 1)
+  elements.themeCustomCss.value = state.themeSettings.customCss || ''
+  updateThemeOpacityOutput()
+  setThemeSettingsError('')
+}
+
+function updateThemeDrawerAuthState() {
+  if (!elements.themeSettingsAuth) return
+  const editable = canEditThemeSettings()
+  elements.themeSettingsAuth.classList.toggle('is-authorized', editable)
+  elements.themeSettingsAuthText.textContent = t(state.preview ? 'themePreviewAuth' : editable ? 'themeAuthorized' : 'themeLoginRequired')
+  elements.themeSettingsLogin.hidden = editable
+  elements.themeSettingsFields.disabled = !editable || state.themeSettingsBusy
+  elements.themeSettingsReset.disabled = !editable || state.themeSettingsBusy
+  elements.themeSettingsSave.disabled = !editable || state.themeSettingsBusy
+
+  const site = themeSettingsAuthSite() || state.sites[0]
+  if (elements.themeOriginalAdminLink) {
+    elements.themeOriginalAdminLink.href = originalAdminUrl(site?.base, location.href)
+  }
+}
+
+function openThemeDrawer() {
+  state.themeDrawerOpen = true
+  populateThemeSettingsForm()
+  updateThemeDrawerAuthState()
+  elements.themeDrawer.classList.add('is-open')
+  elements.themeDrawerBackdrop.classList.add('is-open')
+  elements.themeDrawer.setAttribute('aria-hidden', 'false')
+  elements.themeDrawerBackdrop.setAttribute('aria-hidden', 'false')
+  document.body.classList.add('theme-drawer-open')
+  const target = canEditThemeSettings() ? elements.themeBackgroundImage : elements.themeSettingsLogin
+  const focus = () => target?.focus?.()
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(focus)
+  else setTimeout(focus, 0)
+}
+
+function closeThemeDrawer() {
+  state.themeDrawerOpen = false
+  elements.themeDrawer.classList.remove('is-open')
+  elements.themeDrawerBackdrop.classList.remove('is-open')
+  elements.themeDrawer.setAttribute('aria-hidden', 'true')
+  elements.themeDrawerBackdrop.setAttribute('aria-hidden', 'true')
+  document.body.classList.remove('theme-drawer-open')
+  setThemeSettingsError('')
+}
+
+function themeSettingsFromForm() {
+  return {
+    backgroundImage: elements.themeBackgroundImage.value.trim(),
+    panelOpacity: Number(elements.themePanelOpacity.value),
+    customCss: elements.themeCustomCss.value
+  }
+}
+
+function themeSettingsErrorMessage(error) {
+  if (error?.code === 'invalid_background_image') return t('themeBackgroundInvalid')
+  if (error?.code === 'invalid_panel_opacity') return t('themeOpacityInvalid')
+  if (error?.code === 'unsafe_custom_css' || error?.code === 'invalid_custom_css') return t('themeCssUnsafe')
+  if (error?.code === 'invalid_background_file' || error?.code === 'background_file_too_large') return t('themeFileInvalid')
+  return error?.message || t('themeSaveFailed')
+}
+
+async function submitThemeSettings(event) {
+  event?.preventDefault?.()
+  if (state.themeSettingsBusy) return
+  if (!canEditThemeSettings()) {
+    openLoginModal(preferredLoginSiteIndex())
+    return
+  }
+
+  state.themeSettingsBusy = true
+  updateThemeDrawerAuthState()
+  setThemeSettingsError('')
+  try {
+    let input = validateThemeSettings(themeSettingsFromForm())
+    const backgroundFile = elements.themeBackgroundUpload.files?.[0]
+    if (state.preview) {
+      if (backgroundFile) throw Object.assign(new Error(t('themeUploadPreview')), { code: 'preview_upload_unavailable' })
+      state.themeSettings = { ...input, updatedAt: '', storage: 'preview' }
+      state.themeSettingsLoaded = true
+      applyThemeAppearance(state.themeSettings)
+      showToast(t('themePreviewSaved'))
+      return
+    }
+
+    const site = themeSettingsAuthSite()
+    const token = site ? getJwt(site.base) : ''
+    if (backgroundFile) {
+      const backgroundImage = await uploadThemeBackground(backgroundFile, {
+        token,
+        siteIndex: site?.index || 0
+      })
+      input = validateThemeSettings({ ...input, backgroundImage })
+    }
+    state.themeSettings = await saveThemeSettings(input, {
+      token,
+      siteIndex: site?.index || 0
+    })
+    state.themeSettingsLoaded = true
+    applyThemeAppearance(state.themeSettings)
+    populateThemeSettingsForm()
+    showToast(t('themeSaved'))
+  } catch (error) {
+    if (error?.status === 401) {
+      const site = themeSettingsAuthSite()
+      if (site) setJwt('', site.base)
+      updateAuthButton()
+      openLoginModal(site?.index ?? preferredLoginSiteIndex())
+    }
+    setThemeSettingsError(themeSettingsErrorMessage(error))
+  } finally {
+    state.themeSettingsBusy = false
+    updateThemeDrawerAuthState()
+  }
+}
+
+async function loadPersistedThemeSettings() {
+  const fallback = { backgroundImage: state.config.backgroundImage || '', panelOpacity: 1 }
+  state.themeSettings = state.preview
+    ? { ...normalizeThemeSettings({}, fallback), storage: 'preview', updatedAt: '' }
+    : await loadThemeSettings(fallback)
+  state.themeSettingsLoaded = true
+  applyThemeAppearance(state.themeSettings)
+  populateThemeSettingsForm()
 }
 
 function renderLoginSites() {
@@ -839,13 +1056,10 @@ async function refreshData({ notify = false } = {}) {
     })
     const version = successful.map(result => result.version).find(Boolean)
     elements.versionText.textContent = version ? `CF-Server-Monitor ${version}` : 'CF-Server-Monitor Theme'
-    if (!state.config.title) {
-      const apiTitle = successful.map(result => result.sysConfig?.site_title).find(Boolean)
-      if (apiTitle) {
-        state.config.title = apiTitle
-        applyConfig()
-      }
-    }
+    state.upstreamTitle = successful.map(result => result.sysConfig?.site_title).find(Boolean)
+      || state.sites.map(site => site.config?.site_title).find(Boolean)
+      || ''
+    applyConfig()
 
     recomputeStats()
     renderAll()
@@ -1242,6 +1456,20 @@ function bindEvents() {
     else refreshData()
   })
   elements.authButton.addEventListener('click', () => openLoginModal())
+  elements.themeSettingsButton.addEventListener('click', openThemeDrawer)
+  elements.themeDrawerClose.addEventListener('click', closeThemeDrawer)
+  elements.themeDrawerBackdrop.addEventListener('click', closeThemeDrawer)
+  elements.themeSettingsLogin.addEventListener('click', () => openLoginModal(preferredLoginSiteIndex()))
+  elements.themeSettingsForm.addEventListener('submit', submitThemeSettings)
+  elements.themePanelOpacity.addEventListener('input', updateThemeOpacityOutput)
+  elements.themeSettingsReset.addEventListener('click', () => {
+    elements.themeBackgroundImage.value = ''
+    elements.themeBackgroundUpload.value = ''
+    elements.themePanelOpacity.value = '1'
+    elements.themeCustomCss.value = ''
+    updateThemeOpacityOutput()
+    setThemeSettingsError('')
+  })
   elements.themeButton.addEventListener('click', () => {
     state.theme = state.theme === 'light' ? 'dark' : 'light'
     localStorage.setItem('csm-next-theme', state.theme)
@@ -1308,7 +1536,9 @@ function bindEvents() {
     if (event.target === elements.loginModal) closeLoginModal()
   })
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && !elements.loginModal.hidden) closeLoginModal()
+    if (event.key !== 'Escape') return
+    if (!elements.loginModal.hidden) closeLoginModal()
+    else if (state.themeDrawerOpen) closeThemeDrawer()
   })
   window.addEventListener('beforeunload', closeSockets)
 }
@@ -1321,6 +1551,7 @@ async function init() {
   updateConnectionState('polling')
   state.config = await loadRuntimeConfig()
   applyConfig()
+  await loadPersistedThemeSettings()
 
   try {
     if (state.preview) {

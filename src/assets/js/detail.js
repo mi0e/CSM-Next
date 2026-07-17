@@ -6,7 +6,10 @@ import {
   getLoginTurnstileToken, loginTurnstileRequired, loginWithCredentials,
   removeLoginTurnstile, renderLoginTurnstile
 } from './shared/login.js'
-import { applyBackgroundImage, joinUrl, normalizeBase } from './shared/url.js'
+import { applyThemeAppearance, loadThemeSettings } from './shared/theme.js'
+import { normalizeThemeSettings } from './shared/theme-settings.js'
+import { resolveSiteTitle } from './shared/title.js'
+import { joinUrl, normalizeBase } from './shared/url.js'
 
 const ONLINE_THRESHOLD = 5 * 60 * 1000
 const MB = 1024 * 1024
@@ -55,6 +58,7 @@ const colors = {
 const params = new URLSearchParams(location.search)
 const state = {
   config: {}, sites: [], site: null, server: null, history: [], hours: 1, apiConfig: {},
+  themeSettings: normalizeThemeSettings(), themeSettingsLoaded: false,
   id: params.get('id') || '', siteIndex: Number(params.get('site') || 0), preview: params.get('preview') === '1',
   language: localStorage.getItem('csm-next-language') || (navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'),
   theme: localStorage.getItem('csm-next-theme') || 'light', tab: 'load', socket: null, socketManual: false,
@@ -299,7 +303,7 @@ function applyTranslations() {
 }
 
 function applyConfig() {
-  const title = state.config.title || 'CF-Server-Monitor'
+  const title = resolveSiteTitle(state.config, state.apiConfig)
   elements.brandTitle.textContent = title
   document.title = state.server ? `${state.server.name} · ${title}` : title
   const adminHref = resolveAdminUrl(state.config, {
@@ -314,7 +318,10 @@ function applyConfig() {
   elements.adminLink.rel = external ? 'noopener noreferrer' : ''
   if (elements.loginAdminLink) elements.loginAdminLink.href = originalAdminUrl(currentBase(), location.href)
   if (state.preview) document.querySelectorAll('a[href="./"]').forEach(link => { link.href = './?preview=1' })
-  applyBackgroundImage(state.config.backgroundImage)
+  const appearance = state.themeSettingsLoaded
+    ? state.themeSettings
+    : normalizeThemeSettings({}, { backgroundImage: state.config.backgroundImage, panelOpacity: 1 })
+  state.themeSettings = applyThemeAppearance(appearance)
 }
 
 function showToast(message) {
@@ -366,7 +373,7 @@ function renderIdentity() {
   elements.nodeId.textContent = server.id
   elements.nodeStatus.textContent = online ? t('online') : t('offline')
   elements.nodeStatus.classList.toggle('offline', !online)
-  document.title = `${server.name || server.id} · ${state.config.title || 'CF-Server-Monitor'}`
+  document.title = `${server.name || server.id} · ${resolveSiteTitle(state.config, state.apiConfig)}`
 }
 
 function renderSpecs() {
@@ -723,6 +730,10 @@ async function init() {
   if (!state.id) { showError(new Error(t('invalidId'))); return }
   try {
     state.config = await loadConfig()
+    state.themeSettings = state.preview
+      ? { ...normalizeThemeSettings({}, { backgroundImage: state.config.backgroundImage, panelOpacity: 1 }), storage: 'preview' }
+      : await loadThemeSettings({ backgroundImage: state.config.backgroundImage, panelOpacity: 1 })
+    state.themeSettingsLoaded = true
     const configured = Array.isArray(state.config.apiBase) ? state.config.apiBase : state.config.apiBase ? [state.config.apiBase] : []
     state.sites = (configured.length ? configured : ['']).map((base, index) => ({ index, base: normalizeBase(base) }))
     state.siteIndex = Math.max(0, Math.min(state.sites.length - 1, state.siteIndex || 0)); state.site = state.sites[state.siteIndex]

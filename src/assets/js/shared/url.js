@@ -21,11 +21,10 @@ export function joinUrl(base, path) {
 export function sanitizeBackgroundImage(value) {
   const raw = String(value ?? '').trim()
   if (!raw) return ''
-  // Absolute https only — reject relative paths and other schemes.
-  if (!/^https:\/\//i.test(raw)) return ''
   try {
     const url = new URL(raw)
-    if (url.protocol !== 'https:' || !url.hostname) return ''
+    const localHttp = url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+    if ((url.protocol !== 'https:' && !localHttp) || !url.hostname) return ''
     // Escape characters that break out of CSS url("...")
     return url.href.replaceAll('\\', '%5C').replaceAll('"', '%22').replaceAll("'", '%27').replaceAll(')', '%29')
   } catch {

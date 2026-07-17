@@ -1,6 +1,7 @@
 import { translations } from './i18n.js'
 import { escapeHtml } from '../shared/dom.js'
 import { createTranslator } from '../shared/i18n.js'
+import { resolveSiteTitle } from '../shared/title.js'
 import { normalizeBase } from '../shared/url.js'
 
 const params = new URLSearchParams(location.search)
@@ -123,6 +124,12 @@ export function applyTheme() {
 export function updatePageTitle() {
   const titles = { servers: 'nodeList', settings: 'settings', database: 'database' }
   elements.pageTitle.textContent = t(titles[state.tab] || 'nodeList')
+}
+
+export function updateBrandTitle() {
+  const title = resolveSiteTitle(state.config, state.settings, state.apiConfig)
+  elements.brandTitle.textContent = title
+  document.title = `${t('adminPanel')} · ${title}`
 }
 
 export function openModal(id) {

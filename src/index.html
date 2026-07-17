@@ -8,7 +8,8 @@
     <meta name="theme-color" content="#f8f9fb">
     <title>Server Monitor</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2317191d'/%3E%3Cpath d='M46 20c-4-4-8-6-14-6-10 0-18 8-18 18s8 18 18 18c6 0 11-2 15-7l-7-6c-2 3-5 4-8 4-5 0-9-4-9-9s4-9 9-9c3 0 6 1 8 4z' fill='white'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="./assets/css/main.css?v=20260717-auth">
+    <link rel="stylesheet" href="./assets/css/main.css?v=20260717-kv-theme">
+    <style id="themeCustomStyle"></style>
   </head>
   <body>
     <div class="app-shell">
@@ -29,12 +30,12 @@
             <button id="languageButton" class="icon-button language-button" type="button" data-i18n-title="language" title="切换语言">
               <span>文</span><small>A</small>
             </button>
+            <button id="themeSettingsButton" class="icon-button" type="button" data-i18n-title="themeCustomize" title="主题自定义">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+            </button>
             <button id="authButton" class="icon-button" type="button" data-i18n-title="authorize" title="登录授权">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.7-4 3-6 7-6s6.3 2 7 6"/></svg>
             </button>
-            <a id="adminLink" class="icon-button" href="#" data-i18n-title="admin" title="管理后台">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
-            </a>
           </nav>
         </div>
       </header>
@@ -171,6 +172,62 @@
       </main>
     </div>
 
+    <div id="themeDrawerBackdrop" class="theme-drawer-backdrop" aria-hidden="true"></div>
+    <aside id="themeDrawer" class="theme-drawer" aria-hidden="true" aria-labelledby="themeDrawerTitle">
+      <header class="theme-drawer-header">
+        <div>
+          <p data-i18n="themeExperimental">KV 持久化</p>
+          <h2 id="themeDrawerTitle" data-i18n="themeCustomize">主题自定义</h2>
+        </div>
+        <button id="themeDrawerClose" class="theme-drawer-close" type="button" data-i18n-title="close" title="关闭">×</button>
+      </header>
+
+      <div id="themeSettingsAuth" class="theme-settings-auth">
+        <span aria-hidden="true"></span>
+        <p id="themeSettingsAuthText" data-i18n="themeLoginRequired">登录授权后才可修改并保存全站外观。</p>
+        <button id="themeSettingsLogin" type="button" data-i18n="login">登录</button>
+      </div>
+
+      <form id="themeSettingsForm" class="theme-settings-form">
+        <fieldset id="themeSettingsFields">
+          <label class="theme-settings-field">
+            <span data-i18n="themeBackground">背景图片</span>
+            <input id="themeBackgroundImage" type="url" inputmode="url" placeholder="https://example.com/background.webp">
+            <small data-i18n="themeBackgroundHint">仅允许 HTTPS 图片地址；留空表示不使用背景图。</small>
+          </label>
+
+          <label class="theme-settings-field">
+            <span data-i18n="themeBackgroundUpload">上传本地图片</span>
+            <input id="themeBackgroundUpload" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif">
+            <small data-i18n="themeUploadHint">支持 JPG、PNG、WebP、GIF、AVIF，最大 2 MB；图片与设置共用一个 KV。</small>
+          </label>
+
+          <label class="theme-settings-field">
+            <span><i data-i18n="themeOpacity">界面透明度</i><output id="themeOpacityOutput">100%</output></span>
+            <input id="themePanelOpacity" type="range" min="0.2" max="1" step="0.05" value="1">
+            <small data-i18n="themeOpacityHint">同时调整卡片、顶部栏和背景遮罩透明度。</small>
+          </label>
+
+          <label class="theme-settings-field">
+            <span data-i18n="themeCustomCss">自定义 CSS</span>
+            <textarea id="themeCustomCss" rows="11" maxlength="20000" spellcheck="false" placeholder=":root { --primary: #5aa0f8; }"></textarea>
+            <small data-i18n="themeCssHint">不允许 @import、url() 或脚本；外部资源请使用背景图片设置。</small>
+          </label>
+        </fieldset>
+
+        <p id="themeSettingsError" class="theme-settings-error" role="alert" hidden></p>
+        <div class="theme-settings-actions">
+          <button id="themeSettingsReset" type="button" data-i18n="restoreDefaults">恢复默认</button>
+          <button id="themeSettingsSave" class="primary" type="submit" data-i18n="saveTheme">保存主题</button>
+        </div>
+      </form>
+
+      <footer class="theme-drawer-footer">
+        <a id="themeOriginalAdminLink" href="#" target="_blank" rel="noopener noreferrer" data-i18n="openOriginalAdmin">打开原站后台</a>
+        <small data-i18n="themeKvHint">设置保存在 CSM-Next 独立 KV，不写入上游 D1。</small>
+      </footer>
+    </aside>
+
     <div id="turnstileModal" class="modal-backdrop" hidden>
       <section class="verify-modal" role="dialog" aria-modal="true" aria-labelledby="verifyTitle">
         <span class="brand-mark" aria-hidden="true">C</span>
@@ -213,7 +270,7 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./assets/js/dashboard.js?v=20260717-auth"></script>
+    <script type="module" src="./assets/js/dashboard.js?v=20260717-kv-theme"></script>
   </body>
 </html>
 

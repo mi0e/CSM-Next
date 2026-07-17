@@ -34,6 +34,8 @@ UI 仿照 [komari-next](https://github.com/tonyliuzj/komari-next) 制作，数�
 - 中文、英文、明暗主题和移动端布局
 - Cloudflare Turnstile
 - 独立登录授权，可查看非公开站点、隐藏节点和长历史
+- 首页右侧主题抽屉：背景 URL/图片上传、界面透明度和自定义 CSS
+- Cloudflare KV 自动持久化主题设置，不写入上游 D1
 - 可选实验性主题后台（节点管理、设置、数据库维护，默认关闭）
 
 ## 本地运行
@@ -85,6 +87,8 @@ npm run dev
 4. 构建命令留空，部署命令保持默认的 `npx wrangler deploy`。
 5. 保存并部署。
 
+`wrangler.jsonc` 已声明不带资源 ID 的 `THEME_SETTINGS` binding。首次部署时 Wrangler 会自动创建并绑定 KV namespace，不需要提前运行 `wrangler kv namespace create`，也不需要把账户专属 ID 写进仓库。
+
 ### Cloudflare Worker 配置
 
 1. 进入 **Settings** → **Variables and Secrets**。
@@ -101,6 +105,16 @@ CSM_CUSTOM_ADMIN_ENABLED=true
 ```
 
 未配置或填写 `false` 时，`/admin` 与 `/admin.html` 也会重定向到原站后台。登录授权查看私有内容不受此开关影响。
+
+### 主题自定义
+
+首页顶部齿轮现在打开右侧“主题自定义”抽屉；登录授权按钮位于最右侧。主题抽屉支持：
+
+- 填写 HTTPS 背景图片地址，或上传不超过 2 MB 的 JPG / PNG / WebP / GIF / AVIF。
+- 调整界面透明度（20%–100%）。
+- 添加最多 20,000 字符的自定义 CSS。
+
+读取主题设置是公开的，修改、上传和删除必须先在主题中登录。Worker 会向选中的 CF-Server-Monitor 后端发送无副作用的认证探测，再写入 CSM-Next 自己的 KV；不会调用上游设置写入接口，也不会增加上游 D1 写入。自定义 CSS 禁止 `@import`、`url()`、脚本和其他外部资源加载方式。
 
 ## 测试与构建
 
@@ -141,8 +155,9 @@ CSM-Next/
 ## 使用说明
 
 - 首页的线路延迟和丢包来自最近一次采样，不是 24 小时平均值。
+- 站点标题默认跟随原 CF-Server-Monitor 的 `site_title`；主题配置中的 `title` / `CSM_SITE_TITLE` 仅作为兜底值。
 - 首页和详情页默认读取公开内容；非公开站点、隐藏节点与更长历史可在主题内登录后查看。
-- “管理后台”默认打开当前 CF-Server-Monitor Worker 的原生 `/#/admin`。
+- 顶部齿轮打开主题自定义抽屉；页脚和抽屉中的“原站后台”入口默认打开当前 CF-Server-Monitor Worker 的原生 `/#/admin`。
 - 设置 `customAdminEnabled: true`（普通静态托管）或 `CSM_CUSTOM_ADMIN_ENABLED=true`（Cloudflare Worker）后，才启用主题自建 `admin.html`。
 - CSM-Next 只保存上游签发的站点隔离 JWT，不保存管理密码或 Secret。
 

@@ -44,6 +44,19 @@ test('home and admin footers link to the upstream and theme repositories', async
   assert.match(admin, /class="admin-page-footer"/)
 })
 
+test('home toolbar opens KV theme customization and keeps authorization rightmost', async () => {
+  const home = await readFile(resolve(root, 'src/index.html'), 'utf8')
+  const settingsIndex = home.indexOf('id="themeSettingsButton"')
+  const authIndex = home.indexOf('id="authButton"')
+  assert.ok(settingsIndex > 0 && authIndex > settingsIndex)
+  assert.doesNotMatch(home, /id="adminLink"/)
+  assert.match(home, /id="themeDrawer"/)
+  assert.match(home, /id="themeBackgroundUpload"[^>]+type="file"/)
+  assert.match(home, /id="themePanelOpacity"[^>]+type="range"/)
+  assert.match(home, /id="themeCustomCss"/)
+  assert.match(home, /id="themeOriginalAdminLink"/)
+})
+
 test('admin modules cover core admin API actions', async () => {
   const js = await readAdminSources()
   for (const action of [
