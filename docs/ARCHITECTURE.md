@@ -16,7 +16,7 @@ CSM-Next Cloudflare Worker / 静态托管主题
 CF-Server-Monitor Worker / D1 / Durable Object
 ```
 
-监控页面仍是静态前端，不保存管理密码。Cloudflare 部署额外提供一个很小的主题设置 API：KV 保存外观 JSON 与单张背景图片，写入前通过上游 JWT 验证身份。默认管理入口跳转原 CF-Server-Monitor 的 `/#/admin`；设置 `customAdminEnabled` 后才启用实验性 `admin.html`。主题设置不改上游 D1 / Worker 核心逻辑。
+监控页面仍是静态前端，不保存管理密码。Cloudflare 部署额外提供一个很小的主题设置 API：KV 保存外观 JSON 与单张背景图片，写入前通过上游 JWT 验证身份。外观 JSON 分别保存透明化开关、柔和/毛玻璃模式、面板不透明度与模糊强度；旧版只有 `panelOpacity` 的数据会兼容迁移为原有毛玻璃效果。默认管理入口跳转原 CF-Server-Monitor 的 `/#/admin`；设置 `customAdminEnabled` 后才启用实验性 `admin.html`。主题设置不改上游 D1 / Worker 核心逻辑。
 
 首页探针时间条只为进入视口的节点按需请求 `hours=1` 历史，同时最多加载 4 个节点。每个节点在当前页面只初始化一次，并在浏览器会话中短时缓存；随后利用已有 WebSocket 样本维护滚动一小时窗口，普通 60 秒刷新不会重复读取历史。每个时间条由 24 个真实时间桶组成，缺少采样的桶显示为空，不用当前值重复填充。
 

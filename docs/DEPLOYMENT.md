@@ -55,6 +55,7 @@ https://monitor-a.example.workers.dev,https://monitor-b.example.workers.dev
 - 保存设置和上传背景必须携带主题域名下保存的上游 JWT。
 - Worker 通过上游 `/admin/api` 的无副作用未知 action 验证 JWT，不读取上游敏感设置。
 - 图片限制为 2 MB，并验证文件 MIME 与实际文件头；SVG 和任意文件不允许上传。
+- 透明化开关、柔和/毛玻璃模式、透明强度和模糊强度均保存在同一份主题设置 JSON 中。
 - 自定义 CSS 最大 20,000 字符，禁止外部资源和可执行内容。
 - KV 是最终一致存储；当前页面保存后立即应用，其他地区的访问最多可能短暂读到旧值。
 

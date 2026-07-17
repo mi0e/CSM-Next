@@ -54,12 +54,17 @@ const translations = {
     themeAuthorized: '已登录，保存后将应用到所有访客。', themePreviewAuth: '预览模式：修改仅在当前页面生效。',
     themeBackground: '背景图片', themeBackgroundHint: '仅允许 HTTPS 图片地址；留空表示不使用背景图。',
     themeBackgroundUpload: '上传本地图片', themeUploadHint: '支持 JPG、PNG、WebP、GIF、AVIF，最大 2 MB；上传后自动设为背景。',
-    themeOpacity: '界面透明度', themeOpacityHint: '同时调整卡片、顶部栏和背景遮罩透明度。',
+    themeTransparency: '界面透明化', themeTransparencyHint: '独立控制卡片和顶部栏的透明效果。',
+    themeTransparencyMode: '透明方案',
+    themeTransparencySoft: '柔和透明', themeTransparencySoftHint: '仅透明，不模糊后方内容。',
+    themeTransparencyGlass: '毛玻璃', themeTransparencyGlassHint: '透明并模糊后方内容。',
+    themeTransparencyIntensity: '透明强度', themeTransparencyIntensityHint: '数值越高，卡片和顶部栏越透明。',
+    themeBlurIntensity: '毛玻璃强度', themeBlurIntensityHint: '只在毛玻璃方案下生效。',
     themeCustomCss: '自定义 CSS', themeCssHint: '不允许 @import、url() 或脚本；外部资源请使用背景图片设置。',
     restoreDefaults: '恢复默认', saveTheme: '保存主题', themeSaved: '主题设置已保存',
     themePreviewSaved: '预览样式已应用，刷新页面后恢复', themeSaveFailed: '主题设置保存失败',
     themeBackgroundInvalid: '背景图片必须是完整的 HTTPS 地址',
-    themeOpacityInvalid: '界面透明度必须在 20% 到 100% 之间',
+    themeOpacityInvalid: '透明强度必须在 0% 到 80% 之间', themeBlurInvalid: '毛玻璃强度必须在 0px 到 30px 之间',
     themeCssUnsafe: '自定义 CSS 不能加载外部资源或包含危险指令',
     themeFileInvalid: '请选择 2 MB 以内的 JPG、PNG、WebP、GIF 或 AVIF 图片',
     themeUploadPreview: '本地预览无法保存上传图片，请部署后再试',
@@ -143,12 +148,17 @@ const translations = {
     themeAuthorized: 'Signed in. Saved changes will apply to every visitor.', themePreviewAuth: 'Preview mode: changes apply to this page only.',
     themeBackground: 'Background image', themeBackgroundHint: 'HTTPS image URLs only. Leave empty for no background.',
     themeBackgroundUpload: 'Upload local image', themeUploadHint: 'JPG, PNG, WebP, GIF, or AVIF up to 2 MB. The upload becomes the background.',
-    themeOpacity: 'Interface opacity', themeOpacityHint: 'Adjusts cards, the top bar, and the background overlay together.',
+    themeTransparency: 'Interface transparency', themeTransparencyHint: 'Controls transparency for cards and the top bar independently.',
+    themeTransparencyMode: 'Transparency style',
+    themeTransparencySoft: 'Soft', themeTransparencySoftHint: 'Transparent without blurring content behind it.',
+    themeTransparencyGlass: 'Glass', themeTransparencyGlassHint: 'Transparent with background blur.',
+    themeTransparencyIntensity: 'Transparency intensity', themeTransparencyIntensityHint: 'Higher values make cards and the top bar more transparent.',
+    themeBlurIntensity: 'Glass blur intensity', themeBlurIntensityHint: 'Only applies to the Glass style.',
     themeCustomCss: 'Custom CSS', themeCssHint: '@import, url(), and scripts are blocked. Use the background field for external images.',
     restoreDefaults: 'Restore defaults', saveTheme: 'Save theme', themeSaved: 'Theme settings saved',
     themePreviewSaved: 'Preview styles applied until the page is refreshed.', themeSaveFailed: 'Unable to save theme settings',
     themeBackgroundInvalid: 'The background image must be a complete HTTPS URL',
-    themeOpacityInvalid: 'Interface opacity must be between 20% and 100%',
+    themeOpacityInvalid: 'Transparency intensity must be between 0% and 80%', themeBlurInvalid: 'Glass blur must be between 0px and 30px',
     themeCssUnsafe: 'Custom CSS cannot load external resources or contain unsafe directives',
     themeFileInvalid: 'Choose a JPG, PNG, WebP, GIF, or AVIF image no larger than 2 MB',
     themeUploadPreview: 'Local preview cannot save uploaded images. Try again after deployment.',
@@ -310,8 +320,15 @@ const elements = {
   themeSettingsFields: document.querySelector('#themeSettingsFields'),
   themeBackgroundImage: document.querySelector('#themeBackgroundImage'),
   themeBackgroundUpload: document.querySelector('#themeBackgroundUpload'),
-  themePanelOpacity: document.querySelector('#themePanelOpacity'),
-  themeOpacityOutput: document.querySelector('#themeOpacityOutput'),
+  themeTransparencyEnabled: document.querySelector('#themeTransparencyEnabled'),
+  themeTransparencyOptions: document.querySelector('#themeTransparencyOptions'),
+  themeTransparencySoft: document.querySelector('#themeTransparencySoft'),
+  themeTransparencyGlass: document.querySelector('#themeTransparencyGlass'),
+  themeTransparencyIntensity: document.querySelector('#themeTransparencyIntensity'),
+  themeTransparencyOutput: document.querySelector('#themeTransparencyOutput'),
+  themeBlurField: document.querySelector('#themeBlurField'),
+  themePanelBlur: document.querySelector('#themePanelBlur'),
+  themeBlurOutput: document.querySelector('#themeBlurOutput'),
   themeCustomCss: document.querySelector('#themeCustomCss'),
   themeSettingsError: document.querySelector('#themeSettingsError'),
   themeSettingsReset: document.querySelector('#themeSettingsReset'),
@@ -722,18 +739,34 @@ function setThemeSettingsError(message = '') {
   elements.themeSettingsError.hidden = !message
 }
 
-function updateThemeOpacityOutput() {
-  const opacity = Math.round((Number(elements.themePanelOpacity?.value) || 1) * 100)
-  if (elements.themeOpacityOutput) elements.themeOpacityOutput.textContent = `${opacity}%`
+function updateThemeTransparencyControls({ initializeIntensity = false } = {}) {
+  const enabled = Boolean(elements.themeTransparencyEnabled?.checked)
+  let intensity = Math.round(clamp(elements.themeTransparencyIntensity?.value, 0, 80))
+  if (enabled && initializeIntensity && intensity === 0) {
+    intensity = 35
+    elements.themeTransparencyIntensity.value = String(intensity)
+  }
+  if (!elements.themeTransparencySoft.checked && !elements.themeTransparencyGlass.checked) {
+    elements.themeTransparencySoft.checked = true
+  }
+  const glass = Boolean(elements.themeTransparencyGlass.checked)
+  elements.themeTransparencyOptions.hidden = !enabled
+  elements.themeBlurField.hidden = !enabled || !glass
+  elements.themeTransparencyOutput.textContent = `${intensity}%`
+  elements.themeBlurOutput.textContent = `${Math.round(clamp(elements.themePanelBlur?.value, 0, 30))}px`
 }
 
 function populateThemeSettingsForm() {
   if (!elements.themeSettingsForm) return
   elements.themeBackgroundImage.value = state.themeSettings.backgroundImage || ''
   elements.themeBackgroundUpload.value = ''
-  elements.themePanelOpacity.value = String(state.themeSettings.panelOpacity ?? 1)
+  elements.themeTransparencyEnabled.checked = Boolean(state.themeSettings.transparencyEnabled)
+  elements.themeTransparencyGlass.checked = state.themeSettings.transparencyMode === 'glass'
+  elements.themeTransparencySoft.checked = !elements.themeTransparencyGlass.checked
+  elements.themeTransparencyIntensity.value = String(Math.round((1 - (state.themeSettings.panelOpacity ?? 1)) * 100))
+  elements.themePanelBlur.value = String(state.themeSettings.panelBlur ?? 18)
   elements.themeCustomCss.value = state.themeSettings.customCss || ''
-  updateThemeOpacityOutput()
+  updateThemeTransparencyControls()
   setThemeSettingsError('')
 }
 
@@ -774,9 +807,13 @@ function closeThemeDrawer() {
 }
 
 function themeSettingsFromForm() {
+  const transparencyIntensity = clamp(elements.themeTransparencyIntensity.value, 0, 80)
   return {
     backgroundImage: elements.themeBackgroundImage.value.trim(),
-    panelOpacity: Number(elements.themePanelOpacity.value),
+    transparencyEnabled: Boolean(elements.themeTransparencyEnabled.checked),
+    transparencyMode: elements.themeTransparencyGlass.checked ? 'glass' : 'soft',
+    panelOpacity: Number((1 - transparencyIntensity / 100).toFixed(2)),
+    panelBlur: clamp(elements.themePanelBlur.value, 0, 30),
     customCss: elements.themeCustomCss.value
   }
 }
@@ -784,6 +821,7 @@ function themeSettingsFromForm() {
 function themeSettingsErrorMessage(error) {
   if (error?.code === 'invalid_background_image') return t('themeBackgroundInvalid')
   if (error?.code === 'invalid_panel_opacity') return t('themeOpacityInvalid')
+  if (error?.code === 'invalid_panel_blur') return t('themeBlurInvalid')
   if (error?.code === 'unsafe_custom_css' || error?.code === 'invalid_custom_css') return t('themeCssUnsafe')
   if (error?.code === 'invalid_background_file' || error?.code === 'background_file_too_large') return t('themeFileInvalid')
   return error?.message || t('themeSaveFailed')
@@ -1671,13 +1709,23 @@ function bindEvents() {
   elements.themeDrawerBackdrop.addEventListener('click', closeThemeDrawer)
   elements.themeSettingsLogin.addEventListener('click', () => openLoginModal(preferredLoginSiteIndex()))
   elements.themeSettingsForm.addEventListener('submit', submitThemeSettings)
-  elements.themePanelOpacity.addEventListener('input', updateThemeOpacityOutput)
+  elements.themeTransparencyEnabled.addEventListener('change', () => {
+    updateThemeTransparencyControls({ initializeIntensity: true })
+  })
+  elements.themeTransparencySoft.addEventListener('change', updateThemeTransparencyControls)
+  elements.themeTransparencyGlass.addEventListener('change', updateThemeTransparencyControls)
+  elements.themeTransparencyIntensity.addEventListener('input', updateThemeTransparencyControls)
+  elements.themePanelBlur.addEventListener('input', updateThemeTransparencyControls)
   elements.themeSettingsReset.addEventListener('click', () => {
     elements.themeBackgroundImage.value = ''
     elements.themeBackgroundUpload.value = ''
-    elements.themePanelOpacity.value = '1'
+    elements.themeTransparencyEnabled.checked = false
+    elements.themeTransparencySoft.checked = true
+    elements.themeTransparencyGlass.checked = false
+    elements.themeTransparencyIntensity.value = '0'
+    elements.themePanelBlur.value = '18'
     elements.themeCustomCss.value = ''
-    updateThemeOpacityOutput()
+    updateThemeTransparencyControls()
     setThemeSettingsError('')
   })
   elements.themeButton.addEventListener('click', () => {

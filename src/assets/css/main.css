@@ -26,8 +26,11 @@
   --shadow-md: 0 8px 24px rgb(16 24 40 / 8%);
   --radius: 12px;
   --panel-opacity: 100%;
-  --topbar-opacity: 92%;
+  --topbar-opacity: 100%;
   --background-overlay: 84%;
+  --panel-blur: 0px;
+  --panel-blur-strong: 0px;
+  --background-blur: 0px;
   --panel-surface: color-mix(in srgb, var(--surface) var(--panel-opacity), transparent);
   --panel-surface-soft: color-mix(in srgb, var(--surface-soft) var(--panel-opacity), transparent);
   --panel-surface-raised: color-mix(in srgb, var(--surface-raised) var(--panel-opacity), transparent);
@@ -94,7 +97,7 @@ body.has-background::before {
   z-index: -1;
   content: "";
   background: color-mix(in srgb, var(--page) var(--background-overlay), transparent);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(var(--background-blur));
 }
 
 button,
@@ -144,7 +147,7 @@ svg {
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) var(--topbar-opacity), transparent);
   box-shadow: 0 1px 3px rgb(16 24 40 / 7%);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--panel-blur));
 }
 
 .topbar-inner {
@@ -312,7 +315,7 @@ svg {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel-surface);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-sm);
 }
 
@@ -404,7 +407,7 @@ svg {
   border: 1px solid var(--line);
   border-radius: 11px;
   background: var(--panel-surface);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-sm);
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
@@ -691,7 +694,7 @@ svg {
   border-radius: 12px;
   color: var(--text);
   background: var(--panel-surface);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
@@ -913,7 +916,7 @@ svg {
   padding: 7px 10px 10px;
   border-radius: 10px;
   background: var(--panel-surface-soft);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--panel-blur));
 }
 
 .metric-row {
@@ -933,12 +936,6 @@ svg {
   flex: 0 0 auto;
   color: var(--muted);
   font-size: 13px;
-}
-
-.metric-name.network::before {
-  margin-right: 6px;
-  color: var(--muted-soft);
-  content: "⌁";
 }
 
 .metric-values {
@@ -1195,7 +1192,7 @@ svg {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel-surface);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-sm);
 }
 
@@ -1387,7 +1384,7 @@ svg {
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--panel-surface);
-  backdrop-filter: blur(22px);
+  backdrop-filter: blur(var(--panel-blur-strong));
   box-shadow: 0 24px 70px rgb(0 0 0 / 22%);
   text-align: center;
 }
@@ -1549,7 +1546,7 @@ body.theme-drawer-open {
   color: var(--text);
   background: var(--panel-surface-raised);
   box-shadow: -20px 0 60px rgb(0 0 0 / 18%);
-  backdrop-filter: blur(24px);
+  backdrop-filter: blur(var(--panel-blur-strong));
   pointer-events: none;
   transform: translateX(105%);
   transition: transform 240ms cubic-bezier(.2, .8, .2, 1);
@@ -1665,6 +1662,144 @@ body.theme-drawer-open {
 
 .theme-settings-form fieldset:disabled {
   opacity: 0.58;
+}
+
+.theme-transparency-setting {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-surface-soft);
+}
+
+.theme-settings-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+}
+
+.theme-settings-toggle > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.theme-settings-toggle b {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.theme-settings-toggle small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.theme-settings-toggle input,
+.theme-transparency-modes input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.theme-settings-toggle > i {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--track);
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.theme-settings-toggle > i::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  content: "";
+  background: var(--surface-raised);
+  box-shadow: 0 1px 4px rgb(16 24 40 / 24%);
+  transition: transform 160ms ease;
+}
+
+.theme-settings-toggle input:checked + i {
+  background: var(--primary);
+  box-shadow: none;
+}
+
+.theme-settings-toggle input:checked + i::after {
+  transform: translateX(18px);
+}
+
+.theme-settings-toggle input:focus-visible + i {
+  outline: 3px solid color-mix(in srgb, var(--primary) 24%, transparent);
+  outline-offset: 2px;
+}
+
+.theme-transparency-options {
+  display: grid;
+  gap: 17px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.theme-transparency-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.theme-transparency-modes label {
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.theme-transparency-modes label > span {
+  display: grid;
+  min-height: 62px;
+  align-content: center;
+  gap: 2px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-surface);
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.theme-transparency-modes strong {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.theme-transparency-modes small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.theme-transparency-modes input:checked + span {
+  border-color: color-mix(in srgb, var(--primary) 65%, var(--line));
+  background: color-mix(in srgb, var(--primary) 8%, var(--panel-surface));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.theme-transparency-modes input:focus-visible + span {
+  outline: 3px solid color-mix(in srgb, var(--primary) 24%, transparent);
+  outline-offset: 2px;
 }
 
 .theme-settings-field {

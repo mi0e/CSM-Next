@@ -34,7 +34,7 @@
   border: 1px solid color-mix(in srgb, var(--red) 30%, var(--line));
   border-radius: 14px;
   background: var(--panel-surface);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-md);
   text-align: center;
 }
@@ -77,7 +77,7 @@
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel-surface);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-sm);
 }
 
@@ -192,7 +192,7 @@
   border: 1px solid var(--line);
   border-radius: 11px;
   background: var(--panel-surface);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-sm);
 }
 
@@ -326,7 +326,7 @@
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel-surface);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-sm);
 }
 
@@ -499,7 +499,7 @@
   border: 1px solid var(--line);
   border-radius: 11px;
   background: var(--panel-surface);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-sm);
 }
 

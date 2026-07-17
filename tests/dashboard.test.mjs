@@ -118,13 +118,23 @@ if (document.documentElement.dataset.theme !== 'dark') throw new Error('Theme to
 
 nodeFor('#themeSettingsButton').dispatch('click')
 if (!nodeFor('#themeDrawer').classList.values.has('is-open')) throw new Error('Theme settings drawer did not open')
-nodeFor('#themePanelOpacity').value = '0.6'
-nodeFor('#themePanelOpacity').dispatch('input')
-if (nodeFor('#themeOpacityOutput').textContent !== '60%') throw new Error('Theme opacity output did not update')
+nodeFor('#themeTransparencyEnabled').checked = true
+nodeFor('#themeTransparencyEnabled').dispatch('change')
+if (nodeFor('#themeTransparencyOptions').hidden) throw new Error('Transparency options did not open')
+nodeFor('#themeTransparencySoft').checked = false
+nodeFor('#themeTransparencyGlass').checked = true
+nodeFor('#themeTransparencyGlass').dispatch('change')
+nodeFor('#themeTransparencyIntensity').value = '40'
+nodeFor('#themeTransparencyIntensity').dispatch('input')
+if (nodeFor('#themeTransparencyOutput').textContent !== '40%') throw new Error('Theme transparency output did not update')
+nodeFor('#themePanelBlur').value = '22'
+nodeFor('#themePanelBlur').dispatch('input')
+if (nodeFor('#themeBlurOutput').textContent !== '22px') throw new Error('Theme blur output did not update')
 nodeFor('#themeCustomCss').value = '.brand-title { letter-spacing: .08em; }'
 nodeFor('#themeSettingsForm').dispatch('submit')
 await new Promise(resolvePromise => realSetTimeout(resolvePromise, 20))
 if (document.documentElement.style['--panel-opacity'] !== '60%') throw new Error('Theme opacity was not applied')
+if (document.documentElement.style['--panel-blur'] !== '22px') throw new Error('Theme glass blur was not applied')
 if (!nodeFor('#themeCustomStyle').textContent.includes('letter-spacing')) throw new Error('Custom CSS was not applied safely')
 
 nodeFor('.view-switch').dispatch('click', { target: { closest: () => ({ dataset: { view: 'table' } }) } })

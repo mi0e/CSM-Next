@@ -202,11 +202,44 @@
             <small data-i18n="themeUploadHint">支持 JPG、PNG、WebP、GIF、AVIF，最大 2 MB；上传后自动设为背景。</small>
           </label>
 
-          <label class="theme-settings-field">
-            <span><i data-i18n="themeOpacity">界面透明度</i><output id="themeOpacityOutput">100%</output></span>
-            <input id="themePanelOpacity" type="range" min="0.2" max="1" step="0.05" value="1">
-            <small data-i18n="themeOpacityHint">同时调整卡片、顶部栏和背景遮罩透明度。</small>
-          </label>
+          <section class="theme-transparency-setting">
+            <label class="theme-settings-toggle" for="themeTransparencyEnabled">
+              <span>
+                <b data-i18n="themeTransparency">界面透明化</b>
+                <small data-i18n="themeTransparencyHint">独立控制卡片和顶部栏的透明效果。</small>
+              </span>
+              <input id="themeTransparencyEnabled" type="checkbox" role="switch">
+              <i aria-hidden="true"></i>
+            </label>
+
+            <div id="themeTransparencyOptions" class="theme-transparency-options" hidden>
+              <div class="theme-settings-field">
+                <span id="themeTransparencyModeLabel" data-i18n="themeTransparencyMode">透明方案</span>
+                <div class="theme-transparency-modes" role="radiogroup" aria-labelledby="themeTransparencyModeLabel">
+                  <label>
+                    <input id="themeTransparencySoft" type="radio" name="themeTransparencyMode" value="soft" checked>
+                    <span><strong data-i18n="themeTransparencySoft">柔和透明</strong><small data-i18n="themeTransparencySoftHint">仅透明，不模糊后方内容。</small></span>
+                  </label>
+                  <label>
+                    <input id="themeTransparencyGlass" type="radio" name="themeTransparencyMode" value="glass">
+                    <span><strong data-i18n="themeTransparencyGlass">毛玻璃</strong><small data-i18n="themeTransparencyGlassHint">透明并模糊后方内容。</small></span>
+                  </label>
+                </div>
+              </div>
+
+              <label class="theme-settings-field">
+                <span><i data-i18n="themeTransparencyIntensity">透明强度</i><output id="themeTransparencyOutput">0%</output></span>
+                <input id="themeTransparencyIntensity" type="range" min="0" max="80" step="5" value="0">
+                <small data-i18n="themeTransparencyIntensityHint">数值越高，卡片和顶部栏越透明。</small>
+              </label>
+
+              <label id="themeBlurField" class="theme-settings-field" hidden>
+                <span><i data-i18n="themeBlurIntensity">毛玻璃强度</i><output id="themeBlurOutput">18px</output></span>
+                <input id="themePanelBlur" type="range" min="0" max="30" step="1" value="18">
+                <small data-i18n="themeBlurIntensityHint">只在毛玻璃方案下生效。</small>
+              </label>
+            </div>
+          </section>
 
           <label class="theme-settings-field">
             <span data-i18n="themeCustomCss">自定义 CSS</span>

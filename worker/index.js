@@ -196,7 +196,13 @@ async function handleThemeSettings(request, env) {
 
   try {
     const current = (await readThemeSettings(env)).settings
-    const settings = validateThemeSettings({ ...current, ...input })
+    const merged = { ...current, ...input }
+    if (input && typeof input === 'object' && !Array.isArray(input) &&
+      Object.hasOwn(input, 'panelOpacity') && !Object.hasOwn(input, 'transparencyEnabled')) {
+      merged.transparencyEnabled = Number(input.panelOpacity) < 1
+      if (merged.transparencyEnabled && !Object.hasOwn(input, 'transparencyMode')) merged.transparencyMode = 'glass'
+    }
+    const settings = validateThemeSettings(merged)
     const updatedAt = new Date().toISOString()
     await env.THEME_SETTINGS.put(THEME_SETTINGS_KEY, JSON.stringify({ ...settings, updatedAt }))
     return jsonResponse(request, { success: true, settings, updatedAt, storage: 'kv' })

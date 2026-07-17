@@ -86,10 +86,16 @@ export function applyThemeAppearance(settings, {
 } = {}) {
   const value = normalizeThemeSettings(settings)
   applyBackgroundImage(value.backgroundImage, body)
-  const opacity = Math.round(value.panelOpacity * 100)
+  const opacity = value.transparencyEnabled ? Math.round(value.panelOpacity * 100) : 100
+  const blur = value.transparencyEnabled && value.transparencyMode === 'glass'
+    ? Math.round(value.panelBlur)
+    : 0
   root?.style?.setProperty?.('--panel-opacity', `${opacity}%`)
-  root?.style?.setProperty?.('--topbar-opacity', `${Math.round(opacity * 0.92)}%`)
-  root?.style?.setProperty?.('--background-overlay', `${Math.round(opacity * 0.84)}%`)
+  root?.style?.setProperty?.('--topbar-opacity', `${value.transparencyEnabled ? Math.round(opacity * 0.92) : 100}%`)
+  root?.style?.setProperty?.('--background-overlay', `${value.transparencyEnabled ? Math.round(opacity * 0.84) : 84}%`)
+  root?.style?.setProperty?.('--panel-blur', `${blur}px`)
+  root?.style?.setProperty?.('--panel-blur-strong', `${blur ? Math.min(36, blur + 6) : 0}px`)
+  root?.style?.setProperty?.('--background-blur', `${blur ? Math.min(12, Math.round(blur * 0.45)) : 0}px`)
   if (customStyle) customStyle.textContent = value.customCss
   return value
 }
