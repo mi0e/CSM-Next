@@ -227,21 +227,8 @@ svg {
   height: 19px;
 }
 
-.language-button {
-  position: relative;
-  font-weight: 700;
-}
-
-.language-button span {
-  transform: translate(-2px, 1px);
-  font-size: 15px;
-}
-
-.language-button small {
-  position: absolute;
-  right: 6px;
-  bottom: 4px;
-  font-size: 8px;
+.lucide-icon {
+  stroke-width: 2;
 }
 
 .icon-button.is-spinning svg {
@@ -925,7 +912,8 @@ svg {
 .metrics-panel {
   padding: 7px 10px 10px;
   border-radius: 10px;
-  background: var(--surface-soft);
+  background: var(--panel-surface-soft);
+  backdrop-filter: blur(18px);
 }
 
 .metric-row {
@@ -1799,26 +1787,6 @@ body.theme-drawer-open {
   cursor: not-allowed;
 }
 
-.theme-drawer-footer {
-  display: grid;
-  gap: 5px;
-  padding: 15px 24px calc(15px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--line);
-  background: var(--panel-surface-soft);
-}
-
-.theme-drawer-footer a {
-  width: fit-content;
-  color: var(--primary);
-  font-size: 11px;
-  text-decoration: none;
-}
-
-.theme-drawer-footer small {
-  color: var(--muted);
-  font-size: 9px;
-}
-
 .toast {
   position: fixed;
   right: 22px;
@@ -1922,11 +1890,6 @@ body.theme-drawer-open {
 
   .theme-drawer-header,
   .theme-settings-form,
-  .theme-drawer-footer {
-    padding-right: 18px;
-    padding-left: 18px;
-  }
-
   .theme-settings-auth {
     margin-right: 18px;
     margin-left: 18px;

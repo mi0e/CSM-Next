@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#f8f9fb">
     <title>Server Monitor</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2317191d'/%3E%3Cpath d='M46 20c-4-4-8-6-14-6-10 0-18 8-18 18s8 18 18 18c6 0 11-2 15-7l-7-6c-2 3-5 4-8 4-5 0-9-4-9-9s4-9 9-9c3 0 6 1 8 4z' fill='white'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="./assets/css/main.css?v=20260717-kv-theme">
+    <link rel="stylesheet" href="./assets/css/main.css?v=20260717-probe-lucide">
     <style id="themeCustomStyle"></style>
   </head>
   <body>
@@ -22,19 +22,19 @@
 
           <nav class="top-actions" aria-label="页面工具">
             <button id="refreshButton" class="icon-button" type="button" data-i18n-title="refresh" title="刷新数据">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+              <svg class="lucide-icon" data-lucide="refresh-cw" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
             </button>
             <button id="themeButton" class="icon-button" type="button" data-i18n-title="theme" title="切换主题">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-1.1-.9-2-2-2h-2.1a2 2 0 0 1-1.5-3.3l.3-.4A2 2 0 0 0 14.1 3H12Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="7.8" cy="15" r="1"/></svg>
+              <svg class="lucide-icon" data-lucide="sun-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v2"/><path d="M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715"/><path d="M16 12a4 4 0 0 0-4-4"/><path d="m19 5-1.256 1.256"/><path d="M20 12h2"/></svg>
             </button>
             <button id="languageButton" class="icon-button language-button" type="button" data-i18n-title="language" title="切换语言">
-              <span>文</span><small>A</small>
+              <svg class="lucide-icon" data-lucide="languages" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
             </button>
             <button id="themeSettingsButton" class="icon-button" type="button" data-i18n-title="themeCustomize" title="主题自定义">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+              <svg class="lucide-icon" data-lucide="palette" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/></svg>
             </button>
             <button id="authButton" class="icon-button" type="button" data-i18n-title="authorize" title="登录授权">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.7-4 3-6 7-6s6.3 2 7 6"/></svg>
+              <svg class="lucide-icon" data-lucide="circle-user-round" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.925 20.056a6 6 0 0 0-11.851.001"/><circle cx="12" cy="11" r="4"/><circle cx="12" cy="12" r="10"/></svg>
             </button>
           </nav>
         </div>
@@ -176,7 +176,7 @@
     <aside id="themeDrawer" class="theme-drawer" aria-hidden="true" aria-labelledby="themeDrawerTitle">
       <header class="theme-drawer-header">
         <div>
-          <p data-i18n="themeExperimental">KV 持久化</p>
+          <p data-i18n="themeSubtitle">个性化外观</p>
           <h2 id="themeDrawerTitle" data-i18n="themeCustomize">主题自定义</h2>
         </div>
         <button id="themeDrawerClose" class="theme-drawer-close" type="button" data-i18n-title="close" title="关闭">×</button>
@@ -184,7 +184,7 @@
 
       <div id="themeSettingsAuth" class="theme-settings-auth">
         <span aria-hidden="true"></span>
-        <p id="themeSettingsAuthText" data-i18n="themeLoginRequired">登录授权后才可修改并保存全站外观。</p>
+        <p id="themeSettingsAuthText" data-i18n="themeLoginRequired">登录后即可修改并保存全站主题。</p>
         <button id="themeSettingsLogin" type="button" data-i18n="login">登录</button>
       </div>
 
@@ -199,7 +199,7 @@
           <label class="theme-settings-field">
             <span data-i18n="themeBackgroundUpload">上传本地图片</span>
             <input id="themeBackgroundUpload" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif">
-            <small data-i18n="themeUploadHint">支持 JPG、PNG、WebP、GIF、AVIF，最大 2 MB；图片与设置共用一个 KV。</small>
+            <small data-i18n="themeUploadHint">支持 JPG、PNG、WebP、GIF、AVIF，最大 2 MB；上传后自动设为背景。</small>
           </label>
 
           <label class="theme-settings-field">
@@ -221,11 +221,6 @@
           <button id="themeSettingsSave" class="primary" type="submit" data-i18n="saveTheme">保存主题</button>
         </div>
       </form>
-
-      <footer class="theme-drawer-footer">
-        <a id="themeOriginalAdminLink" href="#" target="_blank" rel="noopener noreferrer" data-i18n="openOriginalAdmin">打开原站后台</a>
-        <small data-i18n="themeKvHint">设置保存在 CSM-Next 独立 KV，不写入上游 D1。</small>
-      </footer>
     </aside>
 
     <div id="turnstileModal" class="modal-backdrop" hidden>
@@ -270,7 +265,7 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./assets/js/dashboard.js?v=20260717-kv-theme"></script>
+    <script type="module" src="./assets/js/dashboard.js?v=20260717-probe-lucide"></script>
   </body>
 </html>
 

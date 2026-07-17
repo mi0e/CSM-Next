@@ -40,8 +40,9 @@ http://127.0.0.1:4173/admin.html?preview=1
 - 详情页：`src/detail.html`、`src/assets/js/detail.js`
 - 登录授权：`src/assets/js/shared/login.js` 与首页/详情页登录弹窗
 - 主题自定义：`src/assets/js/shared/theme.js`、`theme-settings.js`，首页右侧抽屉与 Worker KV 接口
+- 首页探针历史：`src/assets/js/shared/probe-history.js` 负责一小时窗口清洗、合并与 24 桶聚合，`dashboard.js` 负责视口懒加载和 WebSocket 增量
 - 可选主题后台：`src/admin.html`、`src/assets/js/admin.js`（入口）、`src/assets/js/admin/`（`i18n` / `context` / `api` / `servers` / `settings`）、`src/assets/css/admin.css`；生产环境默认关闭
-- 共享模块：`src/assets/js/shared/`（`auth` / `http` / `theme` / `title` / `url` / `dom` / `i18n` / `ping`）
+- 共享模块：`src/assets/js/shared/`（`auth` / `http` / `theme` / `title` / `url` / `dom` / `i18n` / `ping` / `probe-history`）
 - 公共样式：`src/assets/css/main.css`
 - 详情样式：`src/assets/css/detail.css`
 - Worker 路由：`worker/index.js`、`wrangler.jsonc`

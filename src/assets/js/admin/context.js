@@ -165,8 +165,6 @@ export function applyTranslations() {
     node.title = label
     node.setAttribute('aria-label', label)
   })
-  elements.languageButton.querySelector('span').textContent = state.language === 'zh' ? '文' : 'A'
-  elements.languageButton.querySelector('small').textContent = state.language === 'zh' ? 'A' : '文'
   updatePageTitle()
   if (state.changePassword) elements.togglePasswordChange.textContent = t('cancelPasswordChange')
 }

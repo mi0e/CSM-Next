@@ -44,7 +44,7 @@ test('home and admin footers link to the upstream and theme repositories', async
   assert.match(admin, /class="admin-page-footer"/)
 })
 
-test('home toolbar opens KV theme customization and keeps authorization rightmost', async () => {
+test('home toolbar opens theme customization and keeps authorization rightmost', async () => {
   const home = await readFile(resolve(root, 'src/index.html'), 'utf8')
   const settingsIndex = home.indexOf('id="themeSettingsButton"')
   const authIndex = home.indexOf('id="authButton"')
@@ -54,7 +54,24 @@ test('home toolbar opens KV theme customization and keeps authorization rightmos
   assert.match(home, /id="themeBackgroundUpload"[^>]+type="file"/)
   assert.match(home, /id="themePanelOpacity"[^>]+type="range"/)
   assert.match(home, /id="themeCustomCss"/)
-  assert.match(home, /id="themeOriginalAdminLink"/)
+  assert.doesNotMatch(home, /id="themeOriginalAdminLink"/)
+  assert.doesNotMatch(home, /class="theme-drawer-footer"/)
+})
+
+test('top action bars use locally inlined Lucide icons', async () => {
+  const home = await readFile(resolve(root, 'src/index.html'), 'utf8')
+  const detail = await readFile(resolve(root, 'src/detail.html'), 'utf8')
+  const admin = await readFile(resolve(root, 'src/admin.html'), 'utf8')
+  for (const name of ['refresh-cw', 'sun-moon', 'languages', 'palette', 'circle-user-round']) {
+    assert.match(home, new RegExp(`data-lucide="${name}"`))
+  }
+  for (const name of ['layout-dashboard', 'refresh-cw', 'sun-moon', 'languages', 'settings']) {
+    assert.match(detail, new RegExp(`data-lucide="${name}"`))
+  }
+  for (const name of ['menu', 'sun-moon', 'languages']) {
+    assert.match(admin, new RegExp(`data-lucide="${name}"`))
+  }
+  assert.doesNotMatch(home, /<span>文<\/span><small>A<\/small>/)
 })
 
 test('admin modules cover core admin API actions', async () => {

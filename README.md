@@ -28,7 +28,7 @@ UI 仿照 [komari-next](https://github.com/tonyliuzj/komari-next) 制作，数�
 - 首页统计、区域筛选、搜索、网格和表格视图
 - CPU、内存、磁盘、网络和流量信息
 - 节点详情页与历史负载图表
-- 四线路 Ping、丢包、波动和鼠标悬浮数据
+- 首页最近 1 小时四线路延迟/丢包时间条，详情页 Ping、丢包、波动和悬浮数据
 - WebSocket 实时更新，断线后自动重连
 - 多个 Worker 数据合并
 - 中文、英文、明暗主题和移动端布局
@@ -154,10 +154,10 @@ CSM-Next/
 
 ## 使用说明
 
-- 首页的线路延迟和丢包来自最近一次采样，不是 24 小时平均值。
+- 首页可见节点会按需读取最近 1 小时历史，将其聚合成 24 个真实时间桶；延迟和丢包均使用 CT/CU/CM/BD 实际上报字段，后续由 WebSocket 增量更新。尚未载入历史时只显示当前四线路采样。
 - 站点标题默认跟随原 CF-Server-Monitor 的 `site_title`；主题配置中的 `title` / `CSM_SITE_TITLE` 仅作为兜底值。
 - 首页和详情页默认读取公开内容；非公开站点、隐藏节点与更长历史可在主题内登录后查看。
-- 顶部齿轮打开主题自定义抽屉；页脚和抽屉中的“原站后台”入口默认打开当前 CF-Server-Monitor Worker 的原生 `/#/admin`。
+- 顶部齿轮打开主题自定义抽屉；页脚中的“管理后台”入口默认打开当前 CF-Server-Monitor Worker 的原生 `/#/admin`。
 - 设置 `customAdminEnabled: true`（普通静态托管）或 `CSM_CUSTOM_ADMIN_ENABLED=true`（Cloudflare Worker）后，才启用主题自建 `admin.html`。
 - CSM-Next 只保存上游签发的站点隔离 JWT，不保存管理密码或 Secret。
 
@@ -166,6 +166,7 @@ CSM-Next/
 - 后端：[CF-Server-Monitor](https://github.com/huilang-me/CF-Server-Monitor)
 - UI 参考：[komari-next](https://github.com/tonyliuzj/komari-next)
 - 国旗图标：[flag-icons](https://github.com/lipis/flag-icons)
+- 界面图标：[Lucide](https://lucide.dev/)（许可见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)）
 
 CSM-Next 是独立的社区项目，与上述项目维护者没有官方隶属关系。
 

@@ -298,8 +298,6 @@ function applyTranslations() {
   document.querySelectorAll('[data-i18n-title]').forEach(node => {
     const label = t(node.dataset.i18nTitle); node.title = label; node.setAttribute('aria-label', label)
   })
-  elements.languageButton.querySelector('span').textContent = state.language === 'zh' ? '文' : 'A'
-  elements.languageButton.querySelector('small').textContent = state.language === 'zh' ? 'A' : '文'
 }
 
 function applyConfig() {

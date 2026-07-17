@@ -12,6 +12,10 @@ import {
 import {
   normalizeThemeSettings, validateThemeSettings
 } from './shared/theme-settings.js'
+import {
+  mergeProbeHistory, normalizeProbeHistory, PROBE_HISTORY_BUCKETS, PROBE_LINES,
+  summarizeProbeHistory
+} from './shared/probe-history.js'
 import { resolveSiteTitle } from './shared/title.js'
 import { joinUrl, normalizeBase } from './shared/url.js'
 
@@ -19,6 +23,8 @@ const ONLINE_THRESHOLD = 5 * 60 * 1000
 const DEFAULT_REFRESH_INTERVAL = 60 * 1000
 const MB = 1024 * 1024
 const GB = 1024 * MB
+const PROBE_HISTORY_CONCURRENCY = 4
+const PROBE_HISTORY_CACHE_TTL = 2 * 60 * 1000
 
 const translations = {
   zh: {
@@ -43,21 +49,20 @@ const translations = {
     theme: '切换明暗主题',
     language: 'Switch to English',
     admin: '管理后台',
-    themeCustomize: '主题自定义', themeExperimental: 'KV 持久化', close: '关闭',
-    themeLoginRequired: '登录授权后才可修改并保存全站外观。',
-    themeAuthorized: '身份已验证，修改将保存到全站主题。', themePreviewAuth: '预览模式：修改仅在当前页面生效。',
+    themeCustomize: '主题自定义', themeSubtitle: '个性化外观', close: '关闭',
+    themeLoginRequired: '登录后即可修改并保存全站主题。',
+    themeAuthorized: '已登录，保存后将应用到所有访客。', themePreviewAuth: '预览模式：修改仅在当前页面生效。',
     themeBackground: '背景图片', themeBackgroundHint: '仅允许 HTTPS 图片地址；留空表示不使用背景图。',
-    themeBackgroundUpload: '上传本地图片', themeUploadHint: '支持 JPG、PNG、WebP、GIF、AVIF，最大 2 MB；图片与设置共用一个 KV。',
+    themeBackgroundUpload: '上传本地图片', themeUploadHint: '支持 JPG、PNG、WebP、GIF、AVIF，最大 2 MB；上传后自动设为背景。',
     themeOpacity: '界面透明度', themeOpacityHint: '同时调整卡片、顶部栏和背景遮罩透明度。',
     themeCustomCss: '自定义 CSS', themeCssHint: '不允许 @import、url() 或脚本；外部资源请使用背景图片设置。',
     restoreDefaults: '恢复默认', saveTheme: '保存主题', themeSaved: '主题设置已保存',
-    themePreviewSaved: '预览样式已应用，本地预览不会写入 KV', themeSaveFailed: '主题设置保存失败',
+    themePreviewSaved: '预览样式已应用，刷新页面后恢复', themeSaveFailed: '主题设置保存失败',
     themeBackgroundInvalid: '背景图片必须是完整的 HTTPS 地址',
     themeOpacityInvalid: '界面透明度必须在 20% 到 100% 之间',
     themeCssUnsafe: '自定义 CSS 不能加载外部资源或包含危险指令',
     themeFileInvalid: '请选择 2 MB 以内的 JPG、PNG、WebP、GIF 或 AVIF 图片',
-    themeUploadPreview: '本地预览不保存上传文件，请部署 Worker 后测试上传',
-    themeKvHint: '设置保存在 CSM-Next 独立 KV，不写入上游 D1。',
+    themeUploadPreview: '本地预览无法保存上传图片，请部署后再试',
     authorize: '登录授权',
     loginTitle: '登录授权',
     loginMessage: '登录后可查看非公开站点、隐藏节点和长历史数据。',
@@ -94,8 +99,9 @@ const translations = {
     traffic: '流量',
     pingStats: '探针状态',
     latency: '延迟',
-    loss: '实时丢包',
-    liveLossHint: '最近一次 CT/CU/CM/BD 四线路采样的平均丢包率，并非 24 小时历史值',
+    loss: '丢包',
+    lossHistoryHint: '基于最近 1 小时 CT/CU/CM/BD 四线路历史采样计算',
+    lastHour: '最近 1 小时',
     trafficLimit: '流量限额',
     uptime: '运行',
     expired: '已到期',
@@ -132,21 +138,20 @@ const translations = {
     theme: 'Toggle color theme',
     language: '切换到中文',
     admin: 'Admin',
-    themeCustomize: 'Customize theme', themeExperimental: 'KV persisted', close: 'Close',
-    themeLoginRequired: 'Sign in before changing and saving the site-wide appearance.',
-    themeAuthorized: 'Authorized. Changes will be saved for the whole site.', themePreviewAuth: 'Preview mode: changes apply to this page only.',
+    themeCustomize: 'Customize theme', themeSubtitle: 'Personalize appearance', close: 'Close',
+    themeLoginRequired: 'Sign in to customize and save the site-wide theme.',
+    themeAuthorized: 'Signed in. Saved changes will apply to every visitor.', themePreviewAuth: 'Preview mode: changes apply to this page only.',
     themeBackground: 'Background image', themeBackgroundHint: 'HTTPS image URLs only. Leave empty for no background.',
-    themeBackgroundUpload: 'Upload local image', themeUploadHint: 'JPG, PNG, WebP, GIF, or AVIF up to 2 MB. The image shares the same KV namespace.',
+    themeBackgroundUpload: 'Upload local image', themeUploadHint: 'JPG, PNG, WebP, GIF, or AVIF up to 2 MB. The upload becomes the background.',
     themeOpacity: 'Interface opacity', themeOpacityHint: 'Adjusts cards, the top bar, and the background overlay together.',
     themeCustomCss: 'Custom CSS', themeCssHint: '@import, url(), and scripts are blocked. Use the background field for external images.',
     restoreDefaults: 'Restore defaults', saveTheme: 'Save theme', themeSaved: 'Theme settings saved',
-    themePreviewSaved: 'Preview styles applied. Local preview does not write to KV.', themeSaveFailed: 'Unable to save theme settings',
+    themePreviewSaved: 'Preview styles applied until the page is refreshed.', themeSaveFailed: 'Unable to save theme settings',
     themeBackgroundInvalid: 'The background image must be a complete HTTPS URL',
     themeOpacityInvalid: 'Interface opacity must be between 20% and 100%',
     themeCssUnsafe: 'Custom CSS cannot load external resources or contain unsafe directives',
     themeFileInvalid: 'Choose a JPG, PNG, WebP, GIF, or AVIF image no larger than 2 MB',
-    themeUploadPreview: 'Local preview cannot persist uploads. Deploy the Worker to test file uploads.',
-    themeKvHint: 'Stored in CSM-Next KV without writing to the upstream D1 database.',
+    themeUploadPreview: 'Local preview cannot save uploaded images. Try again after deployment.',
     authorize: 'Authorize',
     loginTitle: 'Sign in',
     loginMessage: 'Sign in to view private sites, hidden nodes, and longer history.',
@@ -183,8 +188,9 @@ const translations = {
     traffic: 'Traffic',
     pingStats: 'Probe Stats',
     latency: 'Latency',
-    loss: 'Live Loss',
-    liveLossHint: 'Average loss from the latest CT/CU/CM/BD samples, not a 24-hour history',
+    loss: 'Loss',
+    lossHistoryHint: 'Calculated from CT/CU/CM/BD samples reported during the last hour',
+    lastHour: 'Last hour',
     trafficLimit: 'Traffic Limit',
     uptime: 'up',
     expired: 'Expired',
@@ -236,7 +242,13 @@ const state = {
   themeSettings: normalizeThemeSettings(),
   themeSettingsLoaded: false,
   themeSettingsBusy: false,
-  themeDrawerOpen: false
+  themeDrawerOpen: false,
+  probeHistories: new Map(),
+  probeHistoryLoads: new Set(),
+  probeHistoryQueue: [],
+  probeHistoryQueued: new Set(),
+  probeHistoryActive: 0,
+  probeObserver: null
 }
 
 const elements = {
@@ -304,7 +316,6 @@ const elements = {
   themeSettingsError: document.querySelector('#themeSettingsError'),
   themeSettingsReset: document.querySelector('#themeSettingsReset'),
   themeSettingsSave: document.querySelector('#themeSettingsSave'),
-  themeOriginalAdminLink: document.querySelector('#themeOriginalAdminLink'),
   toast: document.querySelector('#toast'),
   themeColor: document.querySelector('meta[name="theme-color"]')
 }
@@ -477,8 +488,6 @@ function applyTranslations() {
     node.title = text
     node.setAttribute('aria-label', text)
   })
-  elements.languageButton.querySelector('span').textContent = state.language === 'zh' ? '文' : 'A'
-  elements.languageButton.querySelector('small').textContent = state.language === 'zh' ? 'A' : '文'
   updateAuthButton()
   updateThemeDrawerAuthState()
   if (elements.loginModal && !elements.loginModal.hidden) updateLoginModalState({ refreshTurnstile: false })
@@ -498,10 +507,6 @@ function applyConfig() {
   const external = new URL(link, location.href).origin !== location.origin
   elements.footerAdminLink.target = external ? '_blank' : ''
   elements.footerAdminLink.rel = external ? 'noopener noreferrer' : ''
-  const site = themeSettingsAuthSite() || state.sites[0]
-  if (elements.themeOriginalAdminLink) {
-    elements.themeOriginalAdminLink.href = originalAdminUrl(site?.base, location.href)
-  }
   elements.authButton.hidden = state.preview
 }
 
@@ -741,11 +746,6 @@ function updateThemeDrawerAuthState() {
   elements.themeSettingsFields.disabled = !editable || state.themeSettingsBusy
   elements.themeSettingsReset.disabled = !editable || state.themeSettingsBusy
   elements.themeSettingsSave.disabled = !editable || state.themeSettingsBusy
-
-  const site = themeSettingsAuthSite() || state.sites[0]
-  if (elements.themeOriginalAdminLink) {
-    elements.themeOriginalAdminLink.href = originalAdminUrl(site?.base, location.href)
-  }
 }
 
 function openThemeDrawer() {
@@ -1003,6 +1003,168 @@ function previewServers() {
   })
 }
 
+function previewProbeHistory(server, seed = 0) {
+  const now = Date.now()
+  const latest = toTimestamp(server.last_updated) || now
+  return Array.from({ length: 60 }, (_, index) => {
+    const sampleTime = now - (59 - index) * 60_000
+    if (sampleTime > latest) return null
+    const row = { timestamp: sampleTime }
+    PROBE_LINES.forEach((line, lineIndex) => {
+      const ping = server[line.ping] === null || server[line.ping] === undefined || server[line.ping] === ''
+        ? null
+        : Number(server[line.ping])
+      const loss = server[line.loss] === null || server[line.loss] === undefined || server[line.loss] === ''
+        ? null
+        : Number(server[line.loss])
+      if (Number.isFinite(ping) && ping >= 0) {
+        row[line.ping] = Math.max(1, ping + Math.sin((index + seed * 3 + lineIndex) / 6) * (5 + lineIndex * 2))
+      }
+      if (Number.isFinite(loss) && loss >= 0) {
+        const spike = (index + seed + lineIndex * 4) % 23 === 0 ? Math.max(2, loss * 0.8) : 0
+        row[line.loss] = Math.min(100, Math.max(0, loss * 0.45 + Math.sin((index + lineIndex) / 8) * loss * 0.25 + spike))
+      }
+    })
+    return row
+  }).filter(Boolean)
+}
+
+function storeProbeSamples(key, incoming, patch = {}) {
+  if (!key) return
+  const current = state.probeHistories.get(key) || { rows: [], loaded: false, retryAt: 0 }
+  state.probeHistories.set(key, {
+    ...current,
+    ...patch,
+    rows: mergeProbeHistory(current.rows, incoming)
+  })
+}
+
+function currentProbeSample(server) {
+  return {
+    timestamp: toTimestamp(server.report_timestamp ?? server.last_updated) || Date.now(),
+    ...Object.fromEntries(PROBE_LINES.flatMap(line => [
+      [line.ping, server[line.ping]],
+      [line.loss, server[line.loss]]
+    ]))
+  }
+}
+
+function seedCurrentProbeSamples(servers = state.servers) {
+  servers.forEach(server => storeProbeSamples(server._sourceKey, [currentProbeSample(server)]))
+}
+
+function pruneProbeHistories() {
+  const activeKeys = new Set(state.servers.map(server => server._sourceKey))
+  for (const key of state.probeHistories.keys()) {
+    if (!activeKeys.has(key)) state.probeHistories.delete(key)
+  }
+  state.probeHistoryQueue = state.probeHistoryQueue.filter(server => activeKeys.has(server._sourceKey))
+  state.probeHistoryQueued = new Set(state.probeHistoryQueue.map(server => server._sourceKey))
+}
+
+function probeHistoryCacheKey(site, server) {
+  return `csm-next-probe-history:${encodeURIComponent(site.base || location.origin)}:${server.id}`
+}
+
+function readCachedProbeHistory(site, server) {
+  try {
+    if (typeof sessionStorage === 'undefined') return null
+    const key = probeHistoryCacheKey(site, server)
+    const cached = JSON.parse(sessionStorage.getItem(key) || 'null')
+    if (!cached || Date.now() - Number(cached.savedAt) > PROBE_HISTORY_CACHE_TTL) {
+      sessionStorage.removeItem(key)
+      return null
+    }
+    return normalizeProbeHistory(cached.rows)
+  } catch {
+    return null
+  }
+}
+
+function cacheProbeHistory(site, server, rows) {
+  try {
+    if (typeof sessionStorage === 'undefined') return
+    sessionStorage.setItem(probeHistoryCacheKey(site, server), JSON.stringify({
+      savedAt: Date.now(),
+      rows: normalizeProbeHistory(rows)
+    }))
+  } catch { /* storage may be disabled or full */ }
+}
+
+async function loadProbeHistory(server) {
+  const key = server?._sourceKey
+  const site = state.sites[server?._siteIndex]
+  if (!key || !site || state.probeHistoryLoads.has(key)) return
+  state.probeHistoryLoads.add(key)
+  try {
+    const cached = readCachedProbeHistory(site, server)
+    if (cached) {
+      storeProbeSamples(key, cached, { loaded: true, retryAt: 0 })
+      scheduleRender()
+      return
+    }
+    const data = await requestJson(site, `/api/history/all?id=${encodeURIComponent(server.id)}&hours=1`)
+    if (!findServer(key)) return
+    const rows = normalizeProbeHistory(data)
+    storeProbeSamples(key, rows, { loaded: true, retryAt: 0 })
+    cacheProbeHistory(site, server, rows)
+    scheduleRender()
+  } catch (error) {
+    const current = state.probeHistories.get(key) || { rows: [], loaded: false }
+    state.probeHistories.set(key, { ...current, loaded: false, retryAt: Date.now() + 60_000 })
+    console.warn(`[probe-history] unable to load ${key}`, error)
+  } finally {
+    state.probeHistoryLoads.delete(key)
+  }
+}
+
+function pumpProbeHistoryQueue() {
+  while (state.probeHistoryActive < PROBE_HISTORY_CONCURRENCY && state.probeHistoryQueue.length) {
+    const server = state.probeHistoryQueue.shift()
+    const key = server?._sourceKey
+    state.probeHistoryQueued.delete(key)
+    if (!key || !findServer(key)) continue
+    state.probeHistoryActive += 1
+    loadProbeHistory(server).finally(() => {
+      state.probeHistoryActive = Math.max(0, state.probeHistoryActive - 1)
+      pumpProbeHistoryQueue()
+    })
+  }
+}
+
+function queueProbeHistory(server) {
+  const key = server?._sourceKey
+  const entry = state.probeHistories.get(key)
+  if (!key || state.preview || entry?.loaded || (entry?.retryAt || 0) > Date.now()) return
+  if (state.probeHistoryLoads.has(key) || state.probeHistoryQueued.has(key)) return
+  state.probeHistoryQueued.add(key)
+  state.probeHistoryQueue.push(server)
+  pumpProbeHistoryQueue()
+}
+
+function observeVisibleProbeCards() {
+  state.probeObserver?.disconnect?.()
+  state.probeObserver = null
+  if (state.preview) return
+  const cards = [...document.querySelectorAll('.server-card[data-server-key]')]
+  if (!cards.length) return
+  if (typeof IntersectionObserver !== 'function') {
+    cards.forEach(card => queueProbeHistory(findServer(card.dataset.serverKey)))
+    return
+  }
+  state.probeObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return
+      queueProbeHistory(findServer(entry.target.dataset.serverKey))
+      state.probeObserver?.unobserve?.(entry.target)
+    })
+  }, { rootMargin: '240px 0px' })
+  cards.forEach(card => {
+    const history = state.probeHistories.get(card.dataset.serverKey)
+    if (!history?.loaded) state.probeObserver.observe(card)
+  })
+}
+
 async function fetchSiteServers(site) {
   const { data } = await requestJson(site, '/api/servers')
   const raw = Array.isArray(data?.servers)
@@ -1029,6 +1191,10 @@ async function refreshData({ notify = false } = {}) {
   try {
     if (state.preview) {
       state.servers = previewServers()
+      state.probeHistories.clear()
+      state.servers.forEach((server, index) => {
+        storeProbeSamples(server._sourceKey, previewProbeHistory(server, index), { loaded: true, retryAt: 0 })
+      })
       state.siteConfigs = [{ show_price: true, show_expire: true, show_tf: true }]
       elements.versionText.textContent = 'CF-Server-Monitor Theme · Preview'
       hideError()
@@ -1050,6 +1216,8 @@ async function refreshData({ notify = false } = {}) {
     if (!successful.length) throw failures[0]?.error || new Error(t('loadFailed'))
 
     state.servers = successful.flatMap(result => result.servers)
+    pruneProbeHistories()
+    seedCurrentProbeSamples()
     state.siteConfigs = []
     successful.forEach(result => {
       state.siteConfigs[result.siteIndex] = result.sysConfig
@@ -1147,20 +1315,46 @@ function filteredServers() {
 }
 
 function probeClass(value, type) {
+  if (value === null || value === undefined || value === '') return 'missing'
   const number = Number(value)
   if (!Number.isFinite(number) || number < 0) return 'missing'
   if (type === 'latency') return number >= 180 ? 'bad' : number >= 90 ? 'warn' : ''
   return number >= 10 ? 'bad' : number >= 2 ? 'warn' : ''
 }
 
-function renderProbeBars(values, type) {
-  const names = ['CT', 'CU', 'CM', 'BD']
-  const normalized = values.length ? values : [null, null, null, null]
-  return Array.from({ length: 24 }, (_, index) => {
-    const probeIndex = index % normalized.length
-    const value = normalized[probeIndex]
-    const unit = type === 'latency' ? 'ms' : '%'
-    const label = Number.isFinite(Number(value)) ? `${names[probeIndex]} ${Number(value).toFixed(type === 'latency' ? 0 : 1)}${unit}` : `${names[probeIndex]} N/A`
+function formatProbeTime(value) {
+  return new Date(value).toLocaleTimeString(state.language === 'zh' ? 'zh-CN' : 'en-GB', {
+    hour: '2-digit', minute: '2-digit', hour12: false
+  })
+}
+
+function formatProbeValue(value, type) {
+  if (value === null || value === undefined || value === '') return 'N/A'
+  if (!Number.isFinite(Number(value))) return 'N/A'
+  return type === 'latency' ? `${Number(value).toFixed(0)} ms` : `${Number(value).toFixed(1)}%`
+}
+
+function renderProbeTimeline(buckets, type) {
+  return buckets.map((bucket, index) => {
+    const routeValues = PROBE_LINES.flatMap(line => {
+      const value = bucket.probes?.[line.id]
+      return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
+        ? [`${line.id} ${formatProbeValue(value, type)}`]
+        : []
+    })
+    const label = [
+      `${formatProbeTime(bucket.start)}–${formatProbeTime(bucket.end)}`,
+      formatProbeValue(bucket.value, type),
+      ...routeValues
+    ].join(' · ')
+    return `<span class="probe-bar ${probeClass(bucket.value, type)}" data-probe-bucket="${index}" title="${escapeHtml(label)}"></span>`
+  }).join('')
+}
+
+function renderCurrentProbeBars(values, type) {
+  return PROBE_LINES.map((line, index) => {
+    const value = values[index]
+    const label = `${line.id} ${formatProbeValue(value, type)}`
     return `<span class="probe-bar ${probeClass(value, type)}" title="${escapeHtml(label)}"></span>`
   }).join('')
 }
@@ -1179,10 +1373,20 @@ function cardMarkup(server) {
     .map(value => value === null || value === undefined || value === '' ? null : Number(value))
   const lossValues = [server.loss_ct, server.loss_cu, server.loss_cm, server.loss_bd]
     .map(value => value === null || value === undefined || value === '' ? null : Number(value))
-  const pingAverage = average(pingValues)
-  const lossAverage = average(lossValues)
-  const validPings = pingValues.filter(value => Number.isFinite(value) && value >= 0)
-  const pingRange = validPings.length ? Math.max(...validPings) - Math.min(...validPings) : null
+  const history = state.probeHistories.get(server._sourceKey)
+  const historyReady = Boolean(history?.loaded)
+  const probeSummary = historyReady
+    ? summarizeProbeHistory(history.rows, { bucketCount: PROBE_HISTORY_BUCKETS })
+    : null
+  const pingAverage = historyReady ? probeSummary.latency.average : average(pingValues)
+  const lossAverage = historyReady ? probeSummary.loss.average : average(lossValues)
+  const pingBars = historyReady
+    ? renderProbeTimeline(probeSummary.latency.buckets, 'latency')
+    : renderCurrentProbeBars(pingValues, 'latency')
+  const lossBars = historyReady
+    ? renderProbeTimeline(probeSummary.loss.buckets, 'loss')
+    : renderCurrentProbeBars(lossValues, 'loss')
+  const probeSource = historyReady ? 'history' : 'current'
   const limit = parseTrafficLimit(server.traffic_limit)
   const used = trafficUsed(server)
   const quotaPercent = percentage(used, limit)
@@ -1220,11 +1424,11 @@ function cardMarkup(server) {
       <div class="metrics-panel">
         <div class="metric-row"><span class="metric-name network">${t('netSpeed')}</span><span class="metric-values"><span class="up">↑ ${formatBytes(server.net_out_speed)}/s</span><span class="down">↓ ${formatBytes(server.net_in_speed)}/s</span></span></div>
         <div class="metric-row"><span class="metric-name">${t('traffic')}</span><span class="metric-values"><span>↑ ${formatBytes(server.net_tx_monthly)}</span><span>↓ ${formatBytes(server.net_rx_monthly)}</span></span></div>
-        <section class="probe-section">
-          <div class="probe-heading"><span>${t('pingStats')}</span><small>${pingRange === null ? t('currentSamples') : `Δ ${pingRange.toFixed(0)} ms`}</small></div>
+        <section class="probe-section" data-probe-source="${probeSource}">
+          <div class="probe-heading"><span>${t('pingStats')}</span><small>${t(historyReady ? 'lastHour' : 'currentSamples')}</small></div>
           <div class="probe-grid">
-            <div class="probe-box"><div class="probe-box-head"><span>${t('latency')}</span><strong>${pingAverage === null ? t('timeout') : `${pingAverage.toFixed(0)} ms`}</strong></div><div class="probe-bars">${renderProbeBars(pingValues, 'latency')}</div></div>
-            <div class="probe-box"><div class="probe-box-head"><span title="${escapeHtml(t('liveLossHint'))}">${t('loss')}</span><strong>${lossAverage === null ? '—' : `${lossAverage.toFixed(1)}%`}</strong></div><div class="probe-bars">${renderProbeBars(lossValues, 'loss')}</div></div>
+            <div class="probe-box"><div class="probe-box-head"><span>${t('latency')}</span><strong>${pingAverage === null ? t('timeout') : `${pingAverage.toFixed(0)} ms`}</strong></div><div class="probe-bars">${pingBars}</div></div>
+            <div class="probe-box"><div class="probe-box-head"><span title="${escapeHtml(t('lossHistoryHint'))}">${t('loss')}</span><strong>${lossAverage === null ? '—' : `${lossAverage.toFixed(1)}%`}</strong></div><div class="probe-bars">${lossBars}</div></div>
           </div>
         </section>
         ${quota}
@@ -1243,6 +1447,7 @@ function emptyMarkup(hasAnyServers) {
 function renderCards() {
   const servers = filteredServers()
   if (!servers.length) {
+    state.probeObserver?.disconnect?.()
     elements.cardGroups.innerHTML = emptyMarkup(state.servers.length > 0)
     return
   }
@@ -1259,6 +1464,7 @@ function renderCards() {
       ${showGroupTitles ? `<h2 class="group-title">${escapeHtml(name)}<small>${groupServers.length}</small></h2>` : ''}
       <div class="server-grid">${groupServers.map(cardMarkup).join('')}</div>
     </section>`).join('')
+  observeVisibleProbeCards()
 }
 
 function meterMarkup(value) {
@@ -1375,21 +1581,25 @@ function applySocketMessage(site, message) {
   if (message?.type !== 'batchUpdate' || !Array.isArray(message.updates)) return
   for (const update of message.updates) {
     if (!update?.serverId) continue
-    let data = update.data
-    if (!data && Array.isArray(update.samples) && update.samples.length) {
-      const sample = update.samples[update.samples.length - 1]
-      data = sample?.data || sample?.payload || sample?.metrics
-    }
-    if (!data) continue
     const key = `${site.index}:${update.serverId}`
     const index = state.servers.findIndex(server => server._sourceKey === key)
     if (index < 0) continue
+    const samples = Array.isArray(update.samples) && update.samples.length
+      ? update.samples.flatMap(sample => {
+          const data = sample?.data || sample?.payload || sample?.metrics
+          return data ? [{ data, timestamp: sample.ts ?? update.ts ?? message.ts }] : []
+        })
+      : update.data ? [{ data: update.data, timestamp: update.ts ?? message.ts }] : []
+    if (!samples.length) continue
+    storeProbeSamples(key, samples.map(sample => ({ ...sample.data, timestamp: sample.timestamp })))
+    const latest = samples[samples.length - 1]
+    const data = latest.data
     state.servers[index] = {
       ...state.servers[index],
       ...data,
       id: update.serverId,
-      report_timestamp: update.ts ?? message.ts ?? data.report_timestamp ?? data.last_updated,
-      last_updated: update.ts ?? message.ts ?? data.last_updated,
+      report_timestamp: latest.timestamp ?? data.report_timestamp ?? data.last_updated,
+      last_updated: latest.timestamp ?? data.last_updated,
       _siteIndex: site.index,
       _sourceKey: key
     }
