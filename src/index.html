@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#f8f9fb">
     <title>Server Monitor</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2317191d'/%3E%3Cpath d='M46 20c-4-4-8-6-14-6-10 0-18 8-18 18s8 18 18 18c6 0 11-2 15-7l-7-6c-2 3-5 4-8 4-5 0-9-4-9-9s4-9 9-9c3 0 6 1 8 4z' fill='white'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="./assets/css/main.css?v=20260716-5">
+    <link rel="stylesheet" href="./assets/css/main.css?v=20260717-auth">
   </head>
   <body>
     <div class="app-shell">
@@ -28,6 +28,9 @@
             </button>
             <button id="languageButton" class="icon-button language-button" type="button" data-i18n-title="language" title="切换语言">
               <span>文</span><small>A</small>
+            </button>
+            <button id="authButton" class="icon-button" type="button" data-i18n-title="authorize" title="登录授权">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.7-4 3-6 7-6s6.3 2 7 6"/></svg>
             </button>
             <a id="adminLink" class="icon-button" href="#" data-i18n-title="admin" title="管理后台">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
@@ -156,8 +159,14 @@
         </section>
 
         <footer class="footer">
-          <span id="versionText">CF-Server-Monitor Theme</span>
-          <span>CSM-Next · <a id="footerAdminLink" href="#" data-i18n="admin">管理后台</a></span>
+          <a class="footer-project-link" href="https://github.com/huilang-me/CF-Server-Monitor" target="_blank" rel="noopener noreferrer">
+            <span id="versionText">CF-Server-Monitor Theme</span><span class="footer-external-mark" aria-hidden="true">↗</span>
+          </a>
+          <span class="footer-links">
+            <a class="footer-project-link" href="https://github.com/mi0e/CSM-Next" target="_blank" rel="noopener noreferrer">CSM-Next<span class="footer-external-mark" aria-hidden="true">↗</span></a>
+            <span class="footer-separator" aria-hidden="true">·</span>
+            <a id="footerAdminLink" href="#" data-i18n="admin">管理后台</a>
+          </span>
         </footer>
       </main>
     </div>
@@ -171,8 +180,40 @@
       </section>
     </div>
 
+    <div id="loginModal" class="modal-backdrop" hidden>
+      <section class="verify-modal login-modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+        <span class="brand-mark" aria-hidden="true">C</span>
+        <h2 id="loginTitle" data-i18n="loginTitle">登录授权</h2>
+        <p id="loginMessage" data-i18n="loginMessage">登录后可查看非公开站点、隐藏节点和长历史数据。</p>
+        <form id="loginForm" class="login-form" autocomplete="on">
+          <label id="loginSiteField" class="login-field" hidden>
+            <span data-i18n="site">站点</span>
+            <select id="loginSiteSelect" aria-label="API site"></select>
+          </label>
+          <label class="login-field">
+            <span data-i18n="username">用户名</span>
+            <input id="loginUsername" name="username" type="text" autocomplete="username" required>
+          </label>
+          <label class="login-field">
+            <span data-i18n="password">密码</span>
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+          </label>
+          <div id="loginTurnstile" class="turnstile-widget" hidden></div>
+          <p id="loginError" class="login-error" hidden></p>
+          <div class="login-actions">
+            <button id="loginLogout" class="login-logout" type="button" data-i18n="logout" hidden>退出登录</button>
+            <button id="loginCancel" type="button" data-i18n="cancel">取消</button>
+            <button id="loginSubmit" type="submit" data-i18n="login">登录</button>
+          </div>
+        </form>
+        <p class="login-admin-hint">
+          <a id="loginAdminLink" href="#" target="_blank" rel="noopener noreferrer" data-i18n="openOriginalAdmin">打开原站后台</a>
+        </p>
+      </section>
+    </div>
+
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./assets/js/dashboard.js?v=20260717-shared"></script>
+    <script type="module" src="./assets/js/dashboard.js?v=20260717-auth"></script>
   </body>
 </html>
 

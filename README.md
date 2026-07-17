@@ -6,16 +6,18 @@ UI 仿照 [komari-next](https://github.com/tonyliuzj/komari-next) 制作，数�
 
 仓库已经配置好 Cloudflare Workers Builds。把仓库交给 Cloudflare 后，每次推送都会自动部署，不需要 GitHub Actions，也不需要手动上传 `dist/`。
 
-<details>
-<summary><strong>界面预览</strong>（点击展开）</summary>
-
-<br>
+## 界面预览
 
 **首页**（`?preview=1` 模拟数据）
 
 ![首页预览](./docs/screenshots/home-preview.png)
 
-**管理后台**（`admin.html?preview=1`）
+<details>
+<summary><strong>实验性主题后台</strong>（点击展开，生产环境默认关闭）</summary>
+
+<br>
+
+> 实验性功能，默认不会启用。
 
 ![后台预览](./docs/screenshots/admin-preview.png)
 
@@ -31,7 +33,8 @@ UI 仿照 [komari-next](https://github.com/tonyliuzj/komari-next) 制作，数�
 - 多个 Worker 数据合并
 - 中文、英文、明暗主题和移动端布局
 - Cloudflare Turnstile
-- 主题自建管理后台（节点管理、设置、数据库维护）
+- 独立登录授权，可查看非公开站点、隐藏节点和长历史
+- 可选实验性主题后台（节点管理、设置、数据库维护，默认关闭）
 
 ## 本地运行
 
@@ -56,7 +59,8 @@ Copy-Item .\config\config.example.json .\config\config.local.json
   ],
   "title": "My Server Monitor",
   "backgroundImage": "",
-  "refreshInterval": 60000
+  "refreshInterval": 60000,
+  "customAdminEnabled": false
 }
 ```
 
@@ -90,6 +94,14 @@ npm run dev
 5. 值填写自己的 CF-Server-Monitor Worker 地址，例如 `https://your-monitor.example.workers.dev`。
 6. 选择 **Deploy** 使变量生效。
 
+主题默认把“管理后台”链接到原 CF-Server-Monitor 的 `/#/admin`。如需启用 CSM-Next 自带的实验性后台，再添加普通文本变量：
+
+```text
+CSM_CUSTOM_ADMIN_ENABLED=true
+```
+
+未配置或填写 `false` 时，`/admin` 与 `/admin.html` 也会重定向到原站后台。登录授权查看私有内容不受此开关影响。
+
 ## 测试与构建
 
 ```powershell
@@ -103,6 +115,7 @@ npm run build
 dist/
 ├─ index.html
 ├─ detail.html
+├─ admin.html
 ├─ config.json
 └─ assets/
 ```
@@ -128,8 +141,10 @@ CSM-Next/
 ## 使用说明
 
 - 首页的线路延迟和丢包来自最近一次采样，不是 24 小时平均值。
-- 详情页默认读取公开的一小时历史数据；更长时间范围可在主题内登录后查看。
-- “管理后台”打开主题自建页 `admin.html`（节点 / 设置 / 数据库），接口仍走原 Worker 的 `/admin/api`；CSM-Next 不保存管理密码或 Secret。
+- 首页和详情页默认读取公开内容；非公开站点、隐藏节点与更长历史可在主题内登录后查看。
+- “管理后台”默认打开当前 CF-Server-Monitor Worker 的原生 `/#/admin`。
+- 设置 `customAdminEnabled: true`（普通静态托管）或 `CSM_CUSTOM_ADMIN_ENABLED=true`（Cloudflare Worker）后，才启用主题自建 `admin.html`。
+- CSM-Next 只保存上游签发的站点隔离 JWT，不保存管理密码或 Secret。
 
 ## 相关项目
 

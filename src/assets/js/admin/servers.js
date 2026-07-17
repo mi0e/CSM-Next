@@ -1,13 +1,12 @@
 import { escapeHtml } from '../shared/dom.js'
-import { effectivePingNode as resolvePingNode, nodePingField } from '../shared/ping.js'
+import { effectivePingNode as resolvePingNode } from '../shared/ping.js'
 import {
   state, elements, $, t, currentBase, truthy, showToast,
   openModal, closeModal, openConfirm, copyText
 } from './context.js'
 import { adminApi } from './api.js'
 import { loadSettings } from './settings.js'
-
-export { nodePingField }
+import { createServerEditPayload } from './contract.js'
 
 /** Effective host: node field, else global settings for that key. */
 export function effectivePingNode(serverValue, settingsKey) {
@@ -113,65 +112,38 @@ export async function ensureSettingsLoaded() {
   await loadSettings()
 }
 
-export async function openEditModal(server) {
-  await ensureSettingsLoaded()
+export function openEditModal(server) {
   $('edit_id').value = server.id
   $('edit_name').value = server.name || ''
   $('edit_server_group').value = server.server_group || ''
-  $('edit_tags').value = server.tags || ''
-  $('edit_note').value = server.note || ''
   $('edit_price').value = server.price || ''
   $('edit_expire_date').value = server.expire_date || ''
+  $('edit_bandwidth').value = server.bandwidth || ''
   $('edit_traffic_limit').value = server.traffic_limit || ''
   $('edit_traffic_calc_type').value = server.traffic_calc_type || 'total'
   $('edit_reset_day').value = server.reset_day ?? 1
-  $('edit_collect_interval').value = String(server.collect_interval ?? 0)
   $('edit_report_interval').value = String(server.report_interval || 60)
   $('edit_ping_mode').value = server.ping_mode || 'http'
-  // Inputs store node-level only; placeholders show global inheritance hint.
-  $('edit_custom_ct').value = nodePingField(server.custom_ct)
-  $('edit_custom_cu').value = nodePingField(server.custom_cu)
-  $('edit_custom_cm').value = nodePingField(server.custom_cm)
-  $('edit_custom_bd').value = nodePingField(server.custom_bd)
-  $('edit_custom_ct').placeholder = state.settings.custom_ct || ''
-  $('edit_custom_cu').placeholder = state.settings.custom_cu || ''
-  $('edit_custom_cm').placeholder = state.settings.custom_cm || ''
-  $('edit_custom_bd').placeholder = state.settings.custom_bd || ''
-  $('edit_rx_correction').value = server.rx_correction ?? ''
-  $('edit_tx_correction').value = server.tx_correction ?? ''
   $('edit_is_hidden').checked = truthy(server.is_hidden)
-  $('edit_offline_notify_disabled').checked = truthy(server.offline_notify_disabled)
-  const showOffline = state.settings.tg_notify === 'true' && state.settings.tg_bot_token
-  elements.offlineNotifyWrap.hidden = !showOffline
   openModal('editModal')
 }
 
 export async function saveEdit(event) {
   event.preventDefault()
-  const payload = {
-    action: 'edit',
+  const payload = createServerEditPayload({
     id: $('edit_id').value,
-    name: $('edit_name').value.trim(),
-    server_group: $('edit_server_group').value.trim() || 'Default',
-    tags: $('edit_tags').value,
-    note: $('edit_note').value,
+    name: $('edit_name').value,
+    server_group: $('edit_server_group').value,
     price: $('edit_price').value,
     expire_date: $('edit_expire_date').value,
+    bandwidth: $('edit_bandwidth').value,
     traffic_limit: $('edit_traffic_limit').value,
     traffic_calc_type: $('edit_traffic_calc_type').value,
-    reset_day: Number($('edit_reset_day').value || 0),
-    collect_interval: Number($('edit_collect_interval').value || 0),
-    report_interval: Number($('edit_report_interval').value || 60),
+    reset_day: $('edit_reset_day').value,
+    report_interval: $('edit_report_interval').value,
     ping_mode: $('edit_ping_mode').value,
-    custom_ct: nodePingField($('edit_custom_ct').value),
-    custom_cu: nodePingField($('edit_custom_cu').value),
-    custom_cm: nodePingField($('edit_custom_cm').value),
-    custom_bd: nodePingField($('edit_custom_bd').value),
-    rx_correction: $('edit_rx_correction').value,
-    tx_correction: $('edit_tx_correction').value,
-    is_hidden: $('edit_is_hidden').checked ? '1' : '0',
-    offline_notify_disabled: $('edit_offline_notify_disabled').checked ? '1' : '0'
-  }
+    is_hidden: $('edit_is_hidden').checked
+  })
   try {
     await adminApi(payload)
     closeModal('editModal')
@@ -373,4 +345,3 @@ export function bindServerTableEvents() {
     saveOrder(orders)
   })
 }
-

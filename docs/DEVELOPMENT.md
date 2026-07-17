@@ -38,7 +38,8 @@ http://127.0.0.1:4173/admin.html?preview=1
 
 - 仪表盘：`src/index.html`、`src/assets/js/dashboard.js`
 - 详情页：`src/detail.html`、`src/assets/js/detail.js`
-- 管理后台：`src/admin.html`、`src/assets/js/admin.js`（入口）、`src/assets/js/admin/`（`i18n` / `context` / `api` / `servers` / `settings`）、`src/assets/css/admin.css`
+- 登录授权：`src/assets/js/shared/login.js` 与首页/详情页登录弹窗
+- 可选主题后台：`src/admin.html`、`src/assets/js/admin.js`（入口）、`src/assets/js/admin/`（`i18n` / `context` / `api` / `servers` / `settings`）、`src/assets/css/admin.css`；生产环境默认关闭
 - 共享模块：`src/assets/js/shared/`（`auth` / `http` / `url` / `dom` / `i18n` / `ping`）
 - 公共样式：`src/assets/css/main.css`
 - 详情样式：`src/assets/css/detail.css`

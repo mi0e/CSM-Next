@@ -41,6 +41,9 @@ https://monitor-a.example.workers.dev,https://monitor-b.example.workers.dev
 - `CSM_SITE_TITLE`：页面标题。
 - `CSM_BACKGROUND_IMAGE`：背景图片地址，留空表示不使用。
 - `CSM_REFRESH_INTERVAL`：轮询间隔，单位为毫秒，最小 5000。
+- `CSM_CUSTOM_ADMIN_ENABLED`：是否启用实验性主题后台；默认 `false`，管理入口会跳转原站 `/#/admin`。
+
+即使关闭主题后台，首页和详情页仍可在当前主题域名完成登录授权，用于读取非公开站点、隐藏节点和长历史数据。该登录需要下文的跨域配置。
 
 `wrangler.jsonc` 已启用 `keep_vars`，因此以后 Git 自动部署不会删除这些控制台变量。
 

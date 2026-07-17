@@ -1,4 +1,5 @@
 import { getJwt, setJwt } from './shared/auth.js'
+import { isCustomAdminEnabled, originalAdminUrl, resolveAdminUrl } from './shared/admin.js'
 import {
   state, elements, $, t, currentBase, showToast, showLoginError,
   applyTheme, applyTranslations, setSidebarOpen, setAuthedView,
@@ -63,6 +64,7 @@ function bindEvents() {
   elements.sidebarBackdrop.addEventListener('click', () => setSidebarOpen(false))
   elements.siteSelect.addEventListener('change', async () => {
     state.siteIndex = Number(elements.siteSelect.value) || 0
+    updateOriginalAdminLink()
     await loadApiConfig()
     if (getJwt(currentBase())) await enterApp()
     else {
@@ -145,17 +147,30 @@ function applyHomeLinks() {
   })
 }
 
+function updateOriginalAdminLink() {
+  elements.originalAdminLink.href = originalAdminUrl(currentBase(), location.href)
+}
+
 async function init() {
   applyTheme()
   applyTranslations()
-  bindEvents()
 
   state.config = await loadConfig()
   state.sites = buildSites(state.config)
   if (state.siteIndex >= state.sites.length) state.siteIndex = 0
+  if (!state.preview && !isCustomAdminEnabled(state.config)) {
+    location.replace(resolveAdminUrl(state.config, {
+      siteBase: currentBase(),
+      siteIndex: state.siteIndex,
+      pageUrl: location.href
+    }))
+    return
+  }
+  bindEvents()
   elements.brandTitle.textContent = state.config.title || 'CSM-Next'
   document.title = `${t('adminPanel')} · ${state.config.title || 'CSM-Next'}`
   applyHomeLinks()
+  updateOriginalAdminLink()
   renderSiteSelect()
   await loadApiConfig()
 

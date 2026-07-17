@@ -4,5 +4,6 @@
   ],
   "title": "CF-Server-Monitor",
   "backgroundImage": "",
-  "refreshInterval": 60000
+  "refreshInterval": 60000,
+  "customAdminEnabled": false
 }

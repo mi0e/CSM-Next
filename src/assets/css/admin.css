@@ -140,6 +140,8 @@
 }
 
 .admin-sidebar-footer {
+  display: grid;
+  gap: 4px;
   margin-top: auto;
 }
 
@@ -190,6 +192,32 @@
 .admin-content {
   flex: 1;
   padding: 20px 22px 32px;
+}
+
+.admin-page-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0 22px;
+  padding: 14px 4px 18px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted-soft);
+  font-size: 10px;
+}
+
+.admin-page-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 4px;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 140ms ease;
+}
+
+.admin-page-footer a:hover {
+  color: var(--text-strong);
 }
 
 .admin-panel[hidden] {
@@ -719,6 +747,10 @@
 
   .admin-content {
     padding: 16px;
+  }
+
+  .admin-page-footer {
+    margin: 0 16px;
   }
 
   .admin-topbar {

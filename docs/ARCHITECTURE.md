@@ -13,13 +13,13 @@ Cloudflare Worker / 静态托管主题
 CF-Server-Monitor Worker / D1 / Durable Object
 ```
 
-主题是纯静态前端，不包含代理层，也不保存管理凭据。管理 UI 由主题自建页面 `admin.html` 提供，管理 API 仍直接调用原 CF-Server-Monitor Worker 的 `POST /admin/api` 等接口，不改 D1 / Worker 核心逻辑。
+主题是纯静态前端，不包含代理层，也不保存管理密码。默认管理入口跳转原 CF-Server-Monitor 的 `/#/admin`；主题仅调用登录接口获取 JWT，以读取非公开站点、隐藏节点和长历史。设置 `customAdminEnabled` 后才启用实验性 `admin.html`，其管理 API 仍直接调用原 Worker，不改 D1 / Worker 核心逻辑。
 
 通过 Cloudflare Workers 部署时，`worker/index.js` 只负责首页、详情页、后台页和 `config.json` 路由；CSS、JavaScript 等文件由 Workers Static Assets 直接提供。它不会代理监控 API。
 
 ## 目录职责
 
-- `src/index.html`、`src/detail.html`、`src/admin.html`：HTML 页面入口。
+- `src/index.html`、`src/detail.html`：默认页面入口；`src/admin.html` 是开关控制的可选实验后台。
 - `src/assets/js/`：仪表盘、详情页与管理后台入口逻辑。
 - `src/assets/js/admin/`：管理后台分域模块（i18n / context / api / servers / settings）。
 - `src/assets/js/shared/`：跨页共享模块（JWT、HTTP、URL/背景图校验、DOM 转义、i18n、测点字段）。
@@ -41,6 +41,6 @@ CF-Server-Monitor Worker / D1 / Durable Object
 - 公开页面可读取服务器列表、详情及后端允许的历史范围。
 - 超过 1 小时的历史需要 JWT。后端只认 `Authorization: Bearer`，不读 Cookie。
 - JWT 保存在浏览器 `localStorage`，按域名隔离。主题与原管理端不在同一域名时，原后台登录状态不会自动穿透。
-- 详情页与主题后台在本主题域名登录：调用原 `/admin/api` 获取 token，写入当前域名 `localStorage`（按 `apiBase` 隔离）。
+- 首页、详情页与可选主题后台在本主题域名登录：调用原 `/admin/api` 获取 token，写入当前域名 `localStorage`（按 `apiBase` 隔离）。
 - 管理 API、JWT Secret 和 Turnstile Secret 不属于主题源码；主题后台只消费原接口，不增加 D1 读写策略。
 

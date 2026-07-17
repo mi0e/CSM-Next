@@ -1,6 +1,11 @@
 import { getJwt, setJwt, isLoggedIn } from './shared/auth.js'
+import { originalAdminUrl, resolveAdminUrl } from './shared/admin.js'
 import { escapeHtml } from './shared/dom.js'
 import { fetchJson } from './shared/http.js'
+import {
+  getLoginTurnstileToken, loginTurnstileRequired, loginWithCredentials,
+  removeLoginTurnstile, renderLoginTurnstile
+} from './shared/login.js'
 import { applyBackgroundImage, joinUrl, normalizeBase } from './shared/url.js'
 
 const ONLINE_THRESHOLD = 5 * 60 * 1000
@@ -17,7 +22,7 @@ const translations = {
     loginRequired: '超过 1 小时的历史数据需要登录。主题与原后台域名不同，登录状态不会自动共享，请在当前站点登录一次。',
     loginTitle: '登录后查看长历史',
     loginMessage: 'JWT 保存在浏览器当前域名下。原管理端登录不会自动穿透到本主题，请在此输入账号密码。',
-    username: '用户名', password: '密码', login: '登录', cancel: '取消', openAdmin: '打开管理后台',
+    username: '用户名', password: '密码', login: '登录', cancel: '取消', openAdmin: '打开原站后台',
     loginSuccess: '登录成功，正在载入历史数据', loginFailed: '登录失败，请检查账号密码',
     loginMissing: '请输入用户名和密码', loginTurnstile: '请先完成安全验证',
     historyFailed: '历史数据载入失败', current: '当前', telecom: '电信 TCP', unicom: '联通 TCP', mobile: '移动 TCP', backup: '备用线路',
@@ -34,7 +39,7 @@ const translations = {
     loginRequired: 'History beyond one hour requires login. Because this theme uses a different domain, the original Admin session is not shared—sign in here once.',
     loginTitle: 'Sign in for long history',
     loginMessage: 'JWT tokens are scoped to the current browser origin. Logging into the original Admin panel does not transfer credentials here.',
-    username: 'Username', password: 'Password', login: 'Sign in', cancel: 'Cancel', openAdmin: 'Open admin',
+    username: 'Username', password: 'Password', login: 'Sign in', cancel: 'Cancel', openAdmin: 'Open original admin',
     loginSuccess: 'Signed in. Loading history…', loginFailed: 'Sign-in failed. Check username and password.',
     loginMissing: 'Enter username and password', loginTurnstile: 'Complete the security check first',
     historyFailed: 'Failed to load history', current: 'Current', telecom: 'Telecom TCP', unicom: 'Unicom TCP', mobile: 'Mobile TCP', backup: 'Backup',
@@ -172,21 +177,13 @@ function currentBase() {
   return state.site?.base || location.origin
 }
 
-function truthy(value) {
-  return value === true || value === 'true' || value === 1 || value === '1'
-}
-
-function loginTurnstileRequired() {
-  return truthy(state.apiConfig?.turnstile_login_enabled) || truthy(state.apiConfig?.turnstile_enabled)
-}
-
 async function loadConfig() {
   try {
     const response = await fetch('./config.json', { cache: 'no-store' })
     if (!response.ok) throw new Error(`config.json: ${response.status}`)
     return await response.json()
   } catch {
-    return { apiBase: [], title: 'CF-Server-Monitor', backgroundImage: '' }
+    return { apiBase: [], title: 'CF-Server-Monitor', backgroundImage: '', customAdminEnabled: false }
   }
 }
 
@@ -209,56 +206,18 @@ async function requestJson(path, options = {}) {
   return data
 }
 
-async function loadTurnstileScript() {
-  if (window.turnstile) return
-  await new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[data-csm-next-turnstile]')
-    if (existing) {
-      existing.addEventListener('load', resolve, { once: true })
-      existing.addEventListener('error', reject, { once: true })
-      return
-    }
-    const script = document.createElement('script')
-    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
-    script.async = true
-    script.defer = true
-    script.dataset.csmNextTurnstile = 'true'
-    script.addEventListener('load', resolve, { once: true })
-    script.addEventListener('error', reject, { once: true })
-    document.head.append(script)
-  })
-}
-
 function destroyLoginTurnstile() {
-  if (state.turnstileWidgetId != null && window.turnstile?.remove) {
-    try { window.turnstile.remove(state.turnstileWidgetId) } catch { /* noop */ }
-  }
+  removeLoginTurnstile(state.turnstileWidgetId, elements.loginTurnstile)
   state.turnstileWidgetId = null
-  elements.loginTurnstile?.replaceChildren()
 }
 
 async function ensureLoginTurnstile() {
   destroyLoginTurnstile()
-  const siteKey = state.apiConfig?.turnstile_site_key
-  if (!loginTurnstileRequired() || !siteKey || !elements.loginTurnstile) {
-    if (elements.loginTurnstile) elements.loginTurnstile.hidden = true
-    return
-  }
-  elements.loginTurnstile.hidden = false
-  await loadTurnstileScript()
-  state.turnstileWidgetId = window.turnstile.render(elements.loginTurnstile, {
-    sitekey: siteKey,
-    theme: state.theme,
-    'expired-callback': () => {
-      if (state.turnstileWidgetId != null) window.turnstile.reset(state.turnstileWidgetId)
-    }
+  state.turnstileWidgetId = await renderLoginTurnstile({
+    config: state.apiConfig,
+    container: elements.loginTurnstile,
+    theme: state.theme
   })
-}
-
-function getLoginTurnstileToken() {
-  if (!loginTurnstileRequired()) return ''
-  if (state.turnstileWidgetId == null || !window.turnstile?.getResponse) return ''
-  return window.turnstile.getResponse(state.turnstileWidgetId) || ''
 }
 
 function showLoginError(message = '') {
@@ -270,10 +229,7 @@ function showLoginError(message = '') {
 function openLoginModal(hours = state.pendingHistoryHours) {
   state.pendingHistoryHours = hours
   if (elements.loginAdminLink) {
-    const admin = new URL('./admin.html', location.href)
-    if (state.preview) admin.searchParams.set('preview', '1')
-    if (Number.isFinite(state.siteIndex)) admin.searchParams.set('site', String(state.siteIndex))
-    elements.loginAdminLink.href = admin.href
+    elements.loginAdminLink.href = originalAdminUrl(currentBase(), location.href)
   }
   if (elements.loginMessage) elements.loginMessage.textContent = t('loginMessage')
   showLoginError('')
@@ -301,8 +257,8 @@ async function submitLogin(event) {
     showLoginError(t('loginMissing'))
     return
   }
-  if (loginTurnstileRequired()) {
-    const token = getLoginTurnstileToken()
+  if (loginTurnstileRequired(state.apiConfig)) {
+    const token = getLoginTurnstileToken(state.apiConfig, state.turnstileWidgetId)
     if (!token) {
       showLoginError(t('loginTurnstile'))
       return
@@ -313,22 +269,8 @@ async function submitLogin(event) {
   if (elements.loginSubmit) elements.loginSubmit.disabled = true
   showLoginError('')
   try {
-    const headers = new Headers({ 'Content-Type': 'application/json' })
-    const turnstileToken = getLoginTurnstileToken()
-    if (turnstileToken) headers.set('X-Turnstile-Token', turnstileToken)
-    const response = await fetch(joinUrl(state.site.base, '/admin/api'), {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ action: 'login', username, password }),
-      cache: 'no-store'
-    })
-    const data = await response.json().catch(() => null)
-    const token = data?.token || data?.data?.token
-    if (!response.ok || !token) {
-      if (state.turnstileWidgetId != null && window.turnstile?.reset) window.turnstile.reset(state.turnstileWidgetId)
-      throw new Error(data?.error || t('loginFailed'))
-    }
-    setJwt(token, currentBase())
+    const turnstileToken = getLoginTurnstileToken(state.apiConfig, state.turnstileWidgetId)
+    await loginWithCredentials({ base: currentBase(), username, password, turnstileToken })
     const pendingHours = state.pendingHistoryHours ?? state.hours
     closeLoginModal({ clearPending: true })
     showToast(t('loginSuccess'))
@@ -360,12 +302,17 @@ function applyConfig() {
   const title = state.config.title || 'CF-Server-Monitor'
   elements.brandTitle.textContent = title
   document.title = state.server ? `${state.server.name} · ${title}` : title
-  const admin = new URL('./admin.html', location.href)
-  if (state.preview) admin.searchParams.set('preview', '1')
-  if (Number.isFinite(state.siteIndex)) admin.searchParams.set('site', String(state.siteIndex))
-  const adminHref = admin.href
+  const adminHref = resolveAdminUrl(state.config, {
+    siteBase: currentBase(),
+    siteIndex: state.siteIndex,
+    pageUrl: location.href,
+    preview: state.preview
+  })
   elements.adminLink.href = adminHref
-  if (elements.loginAdminLink) elements.loginAdminLink.href = adminHref
+  const external = new URL(adminHref, location.href).origin !== location.origin
+  elements.adminLink.target = external ? '_blank' : ''
+  elements.adminLink.rel = external ? 'noopener noreferrer' : ''
+  if (elements.loginAdminLink) elements.loginAdminLink.href = originalAdminUrl(currentBase(), location.href)
   if (state.preview) document.querySelectorAll('a[href="./"]').forEach(link => { link.href = './?preview=1' })
   applyBackgroundImage(state.config.backgroundImage)
 }

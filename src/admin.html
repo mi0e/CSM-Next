@@ -8,8 +8,8 @@
     <meta name="theme-color" content="#f8f9fb">
     <title>Admin · CSM-Next</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2317191d'/%3E%3Cpath d='M46 20c-4-4-8-6-14-6-10 0-18 8-18 18s8 18 18 18c6 0 11-2 15-7l-7-6c-2 3-5 4-8 4-5 0-9-4-9-9s4-9 9-9c3 0 6 1 8 4z' fill='white'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="./assets/css/main.css?v=20260717-home">
-    <link rel="stylesheet" href="./assets/css/admin.css?v=20260717-home">
+    <link rel="stylesheet" href="./assets/css/main.css?v=20260717-auth">
+    <link rel="stylesheet" href="./assets/css/admin.css?v=20260717-auth">
   </head>
   <body class="admin-body">
     <div id="loginView" class="admin-login-view">
@@ -53,6 +53,7 @@
         </nav>
 
         <div class="admin-sidebar-footer">
+          <a id="originalAdminLink" class="admin-nav-item admin-nav-link" href="#" target="_blank" rel="noopener noreferrer" data-i18n="openOriginalAdmin">打开原站后台</a>
           <a class="admin-nav-item admin-nav-link" href="./" data-i18n="backHome">返回前台</a>
         </div>
       </aside>
@@ -237,6 +238,10 @@
             </div>
           </section>
         </main>
+        <footer class="admin-page-footer">
+          <a class="footer-project-link" href="https://github.com/huilang-me/CF-Server-Monitor" target="_blank" rel="noopener noreferrer">CF-Server-Monitor<span class="footer-external-mark" aria-hidden="true">↗</span></a>
+          <a class="footer-project-link" href="https://github.com/mi0e/CSM-Next" target="_blank" rel="noopener noreferrer">CSM-Next<span class="footer-external-mark" aria-hidden="true">↗</span></a>
+        </footer>
       </div>
     </div>
 
@@ -251,10 +256,9 @@
           <div class="form-grid">
             <label class="form-field"><span data-i18n="name">名称</span><input id="edit_name" required type="text"></label>
             <label class="form-field"><span data-i18n="group">分组</span><input id="edit_server_group" type="text"></label>
-            <label class="form-field"><span data-i18n="tags">标签</span><input id="edit_tags" type="text" data-i18n-placeholder="tagsPlaceholder" placeholder="逗号分隔"></label>
-            <label class="form-field form-field-full"><span data-i18n="note">备注</span><textarea id="edit_note" rows="2" data-i18n-placeholder="notePlaceholder" placeholder="仅后台可见"></textarea></label>
             <label class="form-field"><span data-i18n="price">价格</span><input id="edit_price" type="text"></label>
             <label class="form-field"><span data-i18n="expire">到期日</span><input id="edit_expire_date" type="date"></label>
+            <label class="form-field"><span data-i18n="bandwidth">带宽</span><input id="edit_bandwidth" type="text" placeholder="1 Gbps"></label>
             <label class="form-field"><span data-i18n="trafficLimit">流量限额 (GB)</span><input id="edit_traffic_limit" type="number" min="0" step="1"></label>
             <label class="form-field">
               <span data-i18n="trafficCalcType">流量计算</span>
@@ -264,13 +268,7 @@
                 <option value="dl" data-i18n="trafficCalcDl">仅下载</option>
               </select>
             </label>
-            <label class="form-field"><span data-i18n="trafficResetDay">重置日</span><input id="edit_reset_day" type="number" min="0" max="31"></label>
-            <label class="form-field">
-              <span data-i18n="collectInterval">采集间隔</span>
-              <select id="edit_collect_interval">
-                <option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="5">5</option><option value="10">10</option>
-              </select>
-            </label>
+            <label class="form-field"><span data-i18n="trafficResetDay">重置日</span><input id="edit_reset_day" type="number" min="1" max="31"></label>
             <label class="form-field">
               <span data-i18n="reportInterval">上报间隔</span>
               <select id="edit_report_interval">
@@ -281,14 +279,7 @@
               <span data-i18n="pingMode">Ping 模式</span>
               <select id="edit_ping_mode"><option value="http">HTTP</option><option value="tcp">TCP</option></select>
             </label>
-            <label class="form-field"><span data-i18n="customCt">中国电信测试节点</span><input id="edit_custom_ct" type="text"></label>
-            <label class="form-field"><span data-i18n="customCu">中国联通测试节点</span><input id="edit_custom_cu" type="text"></label>
-            <label class="form-field"><span data-i18n="customCm">中国移动测试节点</span><input id="edit_custom_cm" type="text"></label>
-            <label class="form-field"><span data-i18n="customBd">BD测试节点</span><input id="edit_custom_bd" type="text"></label>
-            <label class="form-field"><span data-i18n="rxCorrection">下行校正 (GB)</span><input id="edit_rx_correction" type="number" min="0" step="0.1"></label>
-            <label class="form-field"><span data-i18n="txCorrection">上行校正 (GB)</span><input id="edit_tx_correction" type="number" min="0" step="0.1"></label>
             <label class="check-item form-field-full"><input id="edit_is_hidden" type="checkbox"><span data-i18n="hideFromPublic">对未登录用户隐藏</span></label>
-            <label id="offlineNotifyWrap" class="check-item form-field-full" hidden><input id="edit_offline_notify_disabled" type="checkbox"><span data-i18n="disableOfflineNotify">禁用该节点离线通知</span></label>
           </div>
           <div class="admin-modal-footer">
             <button type="button" class="admin-btn" data-close="editModal" data-i18n="cancel">取消</button>
@@ -388,7 +379,7 @@
 
     <div id="sidebarBackdrop" class="admin-sidebar-backdrop" hidden></div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./assets/js/admin.js?v=20260717-home"></script>
+    <script type="module" src="./assets/js/admin.js?v=20260717-auth"></script>
   </body>
 </html>
 

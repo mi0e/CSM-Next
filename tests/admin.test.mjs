@@ -32,6 +32,18 @@ test('admin page shell exposes login, nav tabs and server table', async () => {
   assert.match(html, /assets\/css\/admin\.css/)
 })
 
+test('home and admin footers link to the upstream and theme repositories', async () => {
+  const home = await readFile(resolve(root, 'src/index.html'), 'utf8')
+  const admin = await readFile(resolve(root, 'src/admin.html'), 'utf8')
+  for (const html of [home, admin]) {
+    assert.match(html, /href="https:\/\/github\.com\/huilang-me\/CF-Server-Monitor"/)
+    assert.match(html, /href="https:\/\/github\.com\/mi0e\/CSM-Next"/)
+    assert.match(html, /target="_blank" rel="noopener noreferrer"/)
+  }
+  assert.match(home, /id="versionText"/)
+  assert.match(admin, /class="admin-page-footer"/)
+})
+
 test('admin modules cover core admin API actions', async () => {
   const js = await readAdminSources()
   for (const action of [
@@ -56,34 +68,94 @@ test('admin is split into domain modules', async () => {
   assert.match(entry, /from '\.\/admin\/servers\.js'/)
   assert.match(entry, /from '\.\/admin\/settings\.js'/)
   const names = await readdir(resolve(root, 'src/assets/js/admin'))
-  for (const name of ['i18n.js', 'context.js', 'api.js', 'servers.js', 'settings.js']) {
+  for (const name of ['i18n.js', 'context.js', 'api.js', 'contract.js', 'servers.js', 'settings.js']) {
     assert.ok(names.includes(name), `missing admin/${name}`)
   }
 })
 
-test('public pages point admin entry to theme admin.html', async () => {
+test('public pages resolve admin entry through the shared feature flag', async () => {
   const dashboard = await readFile(resolve(root, 'src/assets/js/dashboard.js'), 'utf8')
   const detail = await readFile(resolve(root, 'src/assets/js/detail.js'), 'utf8')
-  assert.match(dashboard, /admin\.html/)
-  assert.doesNotMatch(dashboard, /#\/admin/)
-  assert.match(detail, /admin\.html/)
-  assert.doesNotMatch(detail, /#\/admin/)
+  assert.match(dashboard, /from '\.\/shared\/admin\.js'/)
+  assert.match(detail, /from '\.\/shared\/admin\.js'/)
+  assert.match(dashboard, /resolveAdminUrl\(/)
+  assert.match(detail, /resolveAdminUrl\(/)
 })
 
-test('dashboard admin link passes site query and uses shared getJwt', async () => {
+test('dashboard supports site-scoped authorization independently from admin UI', async () => {
   const dashboard = await readFile(resolve(root, 'src/assets/js/dashboard.js'), 'utf8')
+  const html = await readFile(resolve(root, 'src/index.html'), 'utf8')
   assert.match(dashboard, /from '\.\/shared\/auth\.js'/)
   assert.match(dashboard, /adminUrl\(siteIndex/)
-  assert.match(dashboard, /searchParams\.set\('site'/)
   assert.match(dashboard, /getJwt\(site\?\.base/)
+  assert.match(dashboard, /loginWithCredentials\(/)
+  assert.match(dashboard, /setJwt\('', site\.base\)/)
+  assert.match(html, /id="authButton"/)
+  assert.match(html, /id="loginModal"/)
   assert.doesNotMatch(dashboard, /localStorage\.getItem\('jwt_token'\)/)
 })
 
-test('admin edit keeps node-level ping fields separate from effective install hosts', async () => {
+test('custom admin page redirects itself when the feature is disabled', async () => {
+  const admin = await readFile(resolve(root, 'src/assets/js/admin.js'), 'utf8')
+  assert.match(admin, /isCustomAdminEnabled\(state\.config\)/)
+  assert.match(admin, /location\.replace\(resolveAdminUrl/)
+  assert.match(admin, /originalAdminUrl\(currentBase\(\)/)
+})
+
+test('admin install commands still resolve node and global ping hosts', async () => {
   const servers = await readFile(resolve(root, 'src/assets/js/admin/servers.js'), 'utf8')
   assert.match(servers, /from '\.\.\/shared\/ping\.js'/)
-  assert.match(servers, /export \{ nodePingField \}|nodePingField/)
   assert.match(servers, /function effectivePingNode/)
-  assert.match(servers, /custom_ct: nodePingField\(/)
-  assert.match(servers, /\$\('edit_custom_ct'\)\.value = nodePingField/)
+  assert.match(servers, /effectivePingNode\(server\?\.custom_ct, 'custom_ct'\)/)
+})
+
+test('admin edit payload matches the current upstream API contract', async () => {
+  const { createServerEditPayload } = await import('../src/assets/js/admin/contract.js')
+  const payload = createServerEditPayload({
+    id: 'server-id',
+    name: '  Edge 1  ',
+    server_group: '',
+    price: '¥10/月',
+    expire_date: '2026-12-31',
+    bandwidth: '1 Gbps',
+    traffic_limit: '1024',
+    traffic_calc_type: 'total',
+    reset_day: '15',
+    report_interval: '60',
+    ping_mode: 'tcp',
+    is_hidden: true,
+    tags: 'ignored',
+    note: 'ignored',
+    collect_interval: 5,
+    custom_ct: 'ignored.example',
+    rx_correction: 1,
+    offline_notify_disabled: true
+  })
+
+  assert.deepEqual(Object.keys(payload), [
+    'action', 'id', 'name', 'server_group', 'price', 'expire_date',
+    'bandwidth', 'traffic_limit', 'traffic_calc_type', 'reset_day',
+    'report_interval', 'ping_mode', 'is_hidden'
+  ])
+  assert.equal(payload.name, 'Edge 1')
+  assert.equal(payload.server_group, 'Default')
+  assert.equal(payload.bandwidth, '1 Gbps')
+  assert.equal(payload.reset_day, 15)
+  assert.equal(payload.report_interval, 60)
+  assert.equal(payload.is_hidden, '1')
+})
+
+test('admin edit form only exposes fields persisted by upstream', async () => {
+  const html = await readFile(resolve(root, 'src/admin.html'), 'utf8')
+  const servers = await readFile(resolve(root, 'src/assets/js/admin/servers.js'), 'utf8')
+  assert.match(html, /id="edit_bandwidth"/)
+  assert.match(servers, /\$\('edit_bandwidth'\)\.value = server\.bandwidth/)
+  assert.match(servers, /bandwidth: \$\('edit_bandwidth'\)\.value/)
+  for (const id of [
+    'edit_tags', 'edit_note', 'edit_collect_interval', 'edit_custom_ct',
+    'edit_custom_cu', 'edit_custom_cm', 'edit_custom_bd',
+    'edit_rx_correction', 'edit_tx_correction', 'edit_offline_notify_disabled'
+  ]) {
+    assert.doesNotMatch(html, new RegExp(`id="${id}"`))
+  }
 })

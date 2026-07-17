@@ -1,6 +1,11 @@
-import { getJwt } from './shared/auth.js'
+import { getJwt, setJwt } from './shared/auth.js'
+import { originalAdminUrl, resolveAdminUrl } from './shared/admin.js'
 import { escapeHtml } from './shared/dom.js'
 import { fetchJson } from './shared/http.js'
+import {
+  getLoginTurnstileToken, loginTurnstileRequired, loginWithCredentials,
+  removeLoginTurnstile, renderLoginTurnstile
+} from './shared/login.js'
 import { applyBackgroundImage, joinUrl, normalizeBase } from './shared/url.js'
 
 const ONLINE_THRESHOLD = 5 * 60 * 1000
@@ -31,6 +36,14 @@ const translations = {
     theme: '切换明暗主题',
     language: 'Switch to English',
     admin: '管理后台',
+    authorize: '登录授权',
+    loginTitle: '登录授权',
+    loginMessage: '登录后可查看非公开站点、隐藏节点和长历史数据。',
+    authorizedMessage: '当前站点已授权，可重新登录或退出。',
+    site: '站点', username: '用户名', password: '密码', login: '登录', logout: '退出登录', cancel: '取消',
+    openOriginalAdmin: '打开原站后台', loginSuccess: '登录成功，正在刷新私有内容',
+    logoutSuccess: '已退出当前站点', loginFailed: '登录失败，请检查账号密码',
+    loginMissing: '请输入用户名和密码', loginTurnstile: '请先完成安全验证',
     retry: '重试',
     connecting: '正在连接',
     live: '实时连接',
@@ -47,7 +60,9 @@ const translations = {
     noServerDataHint: '请先在管理后台添加节点，或检查 API 地址配置。',
     loadFailedTitle: '无法读取监控数据',
     loadFailed: '请检查 config.json 中的 apiBase、后端 CORS 设置和站点公开状态。',
-    unauthorized: '当前站点需要登录，请先前往原管理端完成登录。',
+    unauthorized: '当前站点需要在主题中授权后才能查看。',
+    privateSitesTitle: '部分站点需要登录',
+    privateSites: '有 {count} 个站点尚未授权；登录后会自动补充私有节点。',
     verifyTitle: '需要完成安全验证',
     verifyMessage: '验证完成后将自动载入监控数据。',
     verifyingSite: '正在验证站点 {current}/{total}',
@@ -95,6 +110,14 @@ const translations = {
     theme: 'Toggle color theme',
     language: '切换到中文',
     admin: 'Admin',
+    authorize: 'Authorize',
+    loginTitle: 'Sign in',
+    loginMessage: 'Sign in to view private sites, hidden nodes, and longer history.',
+    authorizedMessage: 'This site is authorized. You can sign in again or log out.',
+    site: 'Site', username: 'Username', password: 'Password', login: 'Sign in', logout: 'Log out', cancel: 'Cancel',
+    openOriginalAdmin: 'Open original admin', loginSuccess: 'Signed in. Refreshing private content…',
+    logoutSuccess: 'Signed out of this site', loginFailed: 'Sign-in failed. Check your credentials.',
+    loginMissing: 'Enter username and password', loginTurnstile: 'Complete the security check first',
     retry: 'Retry',
     connecting: 'Connecting',
     live: 'Live updates',
@@ -111,7 +134,9 @@ const translations = {
     noServerDataHint: 'Add a node in Admin or check the configured API endpoint.',
     loadFailedTitle: 'Unable to load monitoring data',
     loadFailed: 'Check apiBase in config.json, backend CORS settings, and public access.',
-    unauthorized: 'This site requires authentication. Sign in through the original Admin panel first.',
+    unauthorized: 'This site requires authorization in the theme before it can be viewed.',
+    privateSitesTitle: 'Some sites require sign-in',
+    privateSites: '{count} site(s) are not authorized. Private nodes will appear after sign-in.',
     verifyTitle: 'Security verification required',
     verifyMessage: 'Monitoring data will load automatically after verification.',
     verifyingSite: 'Verifying site {current} of {total}',
@@ -165,7 +190,11 @@ const state = {
   preview: new URLSearchParams(location.search).get('preview') === '1',
   renderTimer: null,
   refreshTimer: null,
-  clockTimer: null
+  clockTimer: null,
+  loginSiteIndex: 0,
+  loginBusy: false,
+  loginTurnstileWidgetId: null,
+  unauthorizedSiteIndexes: []
 }
 
 const elements = {
@@ -176,6 +205,7 @@ const elements = {
   refreshButton: document.querySelector('#refreshButton'),
   themeButton: document.querySelector('#themeButton'),
   languageButton: document.querySelector('#languageButton'),
+  authButton: document.querySelector('#authButton'),
   currentTime: document.querySelector('#currentTime'),
   currentDate: document.querySelector('#currentDate'),
   onlineCount: document.querySelector('#onlineCount'),
@@ -203,6 +233,19 @@ const elements = {
   turnstileModal: document.querySelector('#turnstileModal'),
   verifyMessage: document.querySelector('#verifyMessage'),
   turnstileWidget: document.querySelector('#turnstileWidget'),
+  loginModal: document.querySelector('#loginModal'),
+  loginForm: document.querySelector('#loginForm'),
+  loginSiteField: document.querySelector('#loginSiteField'),
+  loginSiteSelect: document.querySelector('#loginSiteSelect'),
+  loginUsername: document.querySelector('#loginUsername'),
+  loginPassword: document.querySelector('#loginPassword'),
+  loginError: document.querySelector('#loginError'),
+  loginMessage: document.querySelector('#loginMessage'),
+  loginSubmit: document.querySelector('#loginSubmit'),
+  loginCancel: document.querySelector('#loginCancel'),
+  loginLogout: document.querySelector('#loginLogout'),
+  loginTurnstile: document.querySelector('#loginTurnstile'),
+  loginAdminLink: document.querySelector('#loginAdminLink'),
   toast: document.querySelector('#toast'),
   themeColor: document.querySelector('meta[name="theme-color"]')
 }
@@ -338,12 +381,16 @@ function detailUrl(server) {
 }
 
 function adminUrl(siteIndex = 0) {
-  const configured = state.config.adminUrl
-  if (configured) return configured
-  const url = new URL('./admin.html', location.href)
-  if (state.preview) url.searchParams.set('preview', '1')
-  if (Number.isFinite(siteIndex) && siteIndex >= 0) url.searchParams.set('site', String(siteIndex))
-  return url.href
+  const configured = Array.isArray(state.config.apiBase)
+    ? state.config.apiBase[siteIndex]
+    : state.config.apiBase
+  const siteBase = state.sites[siteIndex]?.base || normalizeBase(configured || '')
+  return resolveAdminUrl(state.config, {
+    siteBase,
+    siteIndex,
+    pageUrl: location.href,
+    preview: state.preview
+  })
 }
 
 function showToast(message) {
@@ -373,6 +420,8 @@ function applyTranslations() {
   })
   elements.languageButton.querySelector('span').textContent = state.language === 'zh' ? '文' : 'A'
   elements.languageButton.querySelector('small').textContent = state.language === 'zh' ? 'A' : '文'
+  updateAuthButton()
+  if (elements.loginModal && !elements.loginModal.hidden) updateLoginModalState({ refreshTurnstile: false })
 }
 
 function applyConfig() {
@@ -384,6 +433,12 @@ function applyConfig() {
   const link = adminUrl()
   elements.adminLink.href = link
   elements.footerAdminLink.href = link
+  const external = new URL(link, location.href).origin !== location.origin
+  for (const element of [elements.adminLink, elements.footerAdminLink]) {
+    element.target = external ? '_blank' : ''
+    element.rel = external ? 'noopener noreferrer' : ''
+  }
+  elements.authButton.hidden = state.preview
 }
 
 function updateClock() {
@@ -408,7 +463,7 @@ async function loadRuntimeConfig() {
     return await response.json()
   } catch (error) {
     console.warn('[theme] config.json could not be loaded, using same-origin defaults.', error)
-    return { apiBase: [], title: 'CF-Server-Monitor', backgroundImage: '' }
+    return { apiBase: [], title: 'CF-Server-Monitor', backgroundImage: '', customAdminEnabled: false }
   }
 }
 
@@ -429,6 +484,10 @@ async function requestJson(site, path, options = {}) {
   if (verified) site.verifiedCredential = verified
   if (data?.turnstile_verified) site.verifiedCredential = data.turnstile_verified
   if (!response.ok) {
+    if (response.status === 401 && getJwt(site?.base || location.origin)) {
+      setJwt('', site?.base || location.origin)
+      updateAuthButton()
+    }
     const error = new Error(data?.error || `HTTP ${response.status}`)
     error.status = response.status
     throw error
@@ -459,6 +518,7 @@ async function initializeSites() {
       site.configError = error
     }
   }))
+  updateAuthButton()
 }
 
 function turnstileEnabled(site) {
@@ -534,6 +594,141 @@ async function verifyTurnstileSites() {
     elements.turnstileModal.hidden = true
     elements.verifyMessage.textContent = t('verifyMessage')
   }
+}
+
+function loginSite() {
+  return state.sites[state.loginSiteIndex] || state.sites[0] || null
+}
+
+function siteLabel(site) {
+  if (!site) return ''
+  try { return new URL(site.base).host || site.base }
+  catch { return site.base || `Site ${site.index + 1}` }
+}
+
+function showLoginError(message = '') {
+  elements.loginError.textContent = message
+  elements.loginError.hidden = !message
+}
+
+function destroyLoginTurnstile() {
+  removeLoginTurnstile(state.loginTurnstileWidgetId, elements.loginTurnstile)
+  state.loginTurnstileWidgetId = null
+}
+
+async function ensureLoginTurnstile() {
+  destroyLoginTurnstile()
+  const site = loginSite()
+  if (!site) return
+  state.loginTurnstileWidgetId = await renderLoginTurnstile({
+    config: site.config,
+    container: elements.loginTurnstile,
+    theme: state.theme
+  })
+}
+
+function updateAuthButton() {
+  if (!elements.authButton) return
+  const authorized = state.sites.some(site => Boolean(getJwt(site.base)))
+  elements.authButton.classList.toggle('is-authorized', authorized)
+  const label = authorized ? t('authorizedMessage') : t('authorize')
+  elements.authButton.title = label
+  elements.authButton.setAttribute('aria-label', label)
+}
+
+function renderLoginSites() {
+  elements.loginSiteField.hidden = state.sites.length <= 1
+  elements.loginSiteSelect.innerHTML = state.sites.map(site => (
+    `<option value="${site.index}" ${site.index === state.loginSiteIndex ? 'selected' : ''}>${escapeHtml(siteLabel(site))}</option>`
+  )).join('')
+  elements.loginSiteSelect.value = String(state.loginSiteIndex)
+}
+
+function updateLoginModalState({ refreshTurnstile = true } = {}) {
+  const site = loginSite()
+  if (!site) return
+  const authorized = Boolean(getJwt(site.base))
+  elements.loginLogout.hidden = !authorized
+  elements.loginMessage.textContent = t(authorized ? 'authorizedMessage' : 'loginMessage')
+  elements.loginAdminLink.href = originalAdminUrl(site.base, location.href)
+  if (refreshTurnstile) ensureLoginTurnstile().catch(() => showLoginError(t('loginTurnstile')))
+}
+
+function preferredLoginSiteIndex() {
+  return state.unauthorizedSiteIndexes[0]
+    ?? state.sites.find(site => !getJwt(site.base))?.index
+    ?? state.sites[0]?.index
+    ?? 0
+}
+
+function openLoginModal(siteIndex = preferredLoginSiteIndex()) {
+  if (!state.sites.length || state.preview) return
+  state.loginSiteIndex = Math.max(0, Math.min(state.sites.length - 1, Number(siteIndex) || 0))
+  renderLoginSites()
+  showLoginError('')
+  elements.loginModal.hidden = false
+  updateLoginModalState()
+  const focus = () => elements.loginUsername?.focus()
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(focus)
+  else setTimeout(focus, 0)
+}
+
+function closeLoginModal() {
+  elements.loginModal.hidden = true
+  destroyLoginTurnstile()
+  showLoginError('')
+  elements.loginPassword.value = ''
+  state.loginBusy = false
+  elements.loginSubmit.disabled = false
+}
+
+async function submitLogin(event) {
+  event?.preventDefault?.()
+  if (state.loginBusy || state.preview) return
+  const site = loginSite()
+  const username = elements.loginUsername.value.trim()
+  const password = elements.loginPassword.value
+  if (!site || !username || !password) {
+    showLoginError(t('loginMissing'))
+    return
+  }
+  const turnstileToken = getLoginTurnstileToken(site.config, state.loginTurnstileWidgetId)
+  if (loginTurnstileRequired(site.config) && !turnstileToken) {
+    showLoginError(t('loginTurnstile'))
+    return
+  }
+
+  state.loginBusy = true
+  elements.loginSubmit.disabled = true
+  showLoginError('')
+  try {
+    await loginWithCredentials({ base: site.base, username, password, turnstileToken })
+    site.config.authorization = true
+    state.unauthorizedSiteIndexes = state.unauthorizedSiteIndexes.filter(index => index !== site.index)
+    closeLoginModal()
+    updateAuthButton()
+    showToast(t('loginSuccess'))
+    await refreshData()
+    if (state.servers.length) connectSockets()
+  } catch (error) {
+    if (state.loginTurnstileWidgetId != null) window.turnstile?.reset?.(state.loginTurnstileWidgetId)
+    showLoginError(error.message || t('loginFailed'))
+  } finally {
+    state.loginBusy = false
+    elements.loginSubmit.disabled = false
+  }
+}
+
+async function logoutCurrentSite() {
+  const site = loginSite()
+  if (!site) return
+  setJwt('', site.base)
+  site.config.authorization = false
+  closeLoginModal()
+  updateAuthButton()
+  showToast(t('logoutSuccess'))
+  await refreshData()
+  if (state.servers.length) connectSockets()
 }
 
 function previewServers() {
@@ -629,8 +824,13 @@ async function refreshData({ notify = false } = {}) {
 
     const results = await Promise.allSettled(state.sites.map(fetchSiteServers))
     const successful = results.filter(result => result.status === 'fulfilled').map(result => result.value)
-    const failures = results.filter(result => result.status === 'rejected').map(result => result.reason)
-    if (!successful.length) throw failures[0] || new Error(t('loadFailed'))
+    const failures = results.flatMap((result, index) => (
+      result.status === 'rejected' ? [{ error: result.reason, site: state.sites[index] }] : []
+    ))
+    const unauthorized = failures.filter(item => item.error?.status === 401)
+    state.unauthorizedSiteIndexes = unauthorized.map(item => item.site.index)
+    updateAuthButton()
+    if (!successful.length) throw failures[0]?.error || new Error(t('loadFailed'))
 
     state.servers = successful.flatMap(result => result.servers)
     state.siteConfigs = []
@@ -649,7 +849,8 @@ async function refreshData({ notify = false } = {}) {
 
     recomputeStats()
     renderAll()
-    hideError()
+    if (unauthorized.length) showAuthorizationNotice(unauthorized.length)
+    else hideError()
     if (failures.length) showToast(`${failures.length} API endpoint(s) unavailable`)
     if (notify) showToast(t('refreshed'))
     updateConnectionState(state.socketOnline > 0 ? 'live' : 'polling')
@@ -900,13 +1101,25 @@ function renderAll() {
 
 function showError(error) {
   const unauthorized = error?.status === 401
-  elements.statusTitle.textContent = t('loadFailedTitle')
+  elements.statusTitle.textContent = t(unauthorized ? 'loginTitle' : 'loadFailedTitle')
   elements.statusMessage.textContent = unauthorized ? t('unauthorized') : t('loadFailed')
+  elements.retryButton.dataset.action = unauthorized ? 'login' : 'retry'
+  elements.retryButton.textContent = t(unauthorized ? 'login' : 'retry')
+  elements.statusBanner.hidden = false
+}
+
+function showAuthorizationNotice(count) {
+  elements.statusTitle.textContent = t('privateSitesTitle')
+  elements.statusMessage.textContent = t('privateSites', { count })
+  elements.retryButton.dataset.action = 'login'
+  elements.retryButton.textContent = t('login')
   elements.statusBanner.hidden = false
 }
 
 function hideError() {
   elements.statusBanner.hidden = true
+  elements.retryButton.dataset.action = 'retry'
+  elements.retryButton.textContent = t('retry')
 }
 
 function findServer(key) {
@@ -1024,11 +1237,16 @@ function bindEvents() {
     if (fallback) fallback.hidden = false
   }, true)
   elements.refreshButton.addEventListener('click', () => refreshData({ notify: true }))
-  elements.retryButton.addEventListener('click', () => refreshData())
+  elements.retryButton.addEventListener('click', () => {
+    if (elements.retryButton.dataset.action === 'login') openLoginModal()
+    else refreshData()
+  })
+  elements.authButton.addEventListener('click', () => openLoginModal())
   elements.themeButton.addEventListener('click', () => {
     state.theme = state.theme === 'light' ? 'dark' : 'light'
     localStorage.setItem('csm-next-theme', state.theme)
     applyTheme()
+    if (!elements.loginModal.hidden) updateLoginModalState()
   })
   elements.languageButton.addEventListener('click', () => {
     state.language = state.language === 'zh' ? 'en' : 'zh'
@@ -1077,6 +1295,20 @@ function bindEvents() {
       event.preventDefault()
       openServerFromElement(event.target.closest('[data-server-key]'))
     }
+  })
+  elements.loginForm.addEventListener('submit', submitLogin)
+  elements.loginCancel.addEventListener('click', closeLoginModal)
+  elements.loginLogout.addEventListener('click', logoutCurrentSite)
+  elements.loginSiteSelect.addEventListener('change', () => {
+    state.loginSiteIndex = Number(elements.loginSiteSelect.value) || 0
+    showLoginError('')
+    updateLoginModalState()
+  })
+  elements.loginModal.addEventListener('click', event => {
+    if (event.target === elements.loginModal) closeLoginModal()
+  })
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !elements.loginModal.hidden) closeLoginModal()
   })
   window.addEventListener('beforeunload', closeSockets)
 }

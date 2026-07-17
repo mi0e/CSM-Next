@@ -12,6 +12,9 @@
       "/",
       "/config.json",
       "/detail",
+      "/admin",
+      "/admin/*",
+      "/admin.html",
       "/pages",
       "/pages/*"
     ]

@@ -13,15 +13,31 @@ const env = {
   }
 }
 
-test('Worker maps public page routes to source HTML', async () => {
+test('Worker maps public pages and sends admin to upstream by default', async () => {
   const index = await worker.fetch(new Request('https://theme.example/'), env)
   const detail = await worker.fetch(new Request('https://theme.example/detail.html?id=node-1'), env)
-  const admin = await worker.fetch(new Request('https://theme.example/admin'), env)
+  const admin = await worker.fetch(new Request('https://theme.example/admin?site=1'), env)
+  const directAdmin = await worker.fetch(new Request('https://theme.example/admin.html?site=1'), env)
 
   assert.equal(await index.text(), '/index.html')
   assert.equal(await detail.text(), '/detail.html')
+  assert.equal(admin.status, 302)
+  assert.equal(admin.headers.get('location'), 'https://two.example.workers.dev/#/admin')
+  assert.equal(directAdmin.status, 302)
+  assert.equal(directAdmin.headers.get('location'), 'https://two.example.workers.dev/#/admin')
+})
+
+test('Worker serves the custom admin only when explicitly enabled', async () => {
+  const enabledEnv = { ...env, CSM_CUSTOM_ADMIN_ENABLED: 'true' }
+  const admin = await worker.fetch(new Request('https://theme.example/admin?site=1'), enabledEnv)
+  const direct = await worker.fetch(new Request('https://theme.example/admin.html?site=1'), enabledEnv)
+  const preview = await worker.fetch(new Request('https://theme.example/admin?preview=1'), env)
+
   assert.equal(admin.status, 308)
-  assert.equal(admin.headers.get('location'), 'https://theme.example/admin.html')
+  assert.equal(admin.headers.get('location'), 'https://theme.example/admin.html?site=1')
+  assert.equal(await direct.text(), '/admin.html')
+  assert.equal(preview.status, 308)
+  assert.equal(preview.headers.get('location'), 'https://theme.example/admin.html?preview=1')
 })
 
 test('Worker redirects legacy pages paths to root routes', async () => {
@@ -42,7 +58,14 @@ test('Worker exposes runtime frontend configuration', async () => {
   assert.equal(config.title, 'Test Monitor')
   assert.equal(config.backgroundImage, 'https://example.com/background.jpg')
   assert.equal(config.refreshInterval, 30000)
+  assert.equal(config.customAdminEnabled, false)
   assert.equal(response.headers.get('cache-control'), 'no-store')
+
+  const enabledResponse = await worker.fetch(new Request('https://theme.example/config.json'), {
+    ...env,
+    CSM_CUSTOM_ADMIN_ENABLED: 'true'
+  })
+  assert.equal((await enabledResponse.json()).customAdminEnabled, true)
 })
 
 test('Worker passes static assets through and rejects writes', async () => {

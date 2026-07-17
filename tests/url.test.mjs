@@ -7,6 +7,7 @@ globalThis.location = {
 }
 
 const { sanitizeBackgroundImage, applyBackgroundImage, joinUrl, normalizeBase } = await import('../src/assets/js/shared/url.js')
+const { isCustomAdminEnabled, originalAdminUrl, resolveAdminUrl } = await import('../src/assets/js/shared/admin.js')
 
 test('sanitizeBackgroundImage allows https only', () => {
   assert.equal(
@@ -48,4 +49,24 @@ test('applyBackgroundImage sets or clears body styles', () => {
 test('joinUrl and normalizeBase stay stable', () => {
   assert.equal(joinUrl('https://a.example/', '/api/config'), 'https://a.example/api/config')
   assert.equal(normalizeBase('https://a.example/'), 'https://a.example')
+})
+
+test('admin URL defaults upstream and only uses theme admin when enabled', () => {
+  const options = {
+    siteBase: 'https://api.example.workers.dev/base',
+    siteIndex: 2,
+    pageUrl: 'https://theme.example/index.html'
+  }
+  assert.equal(isCustomAdminEnabled({}), false)
+  assert.equal(isCustomAdminEnabled({ customAdminEnabled: 'true' }), true)
+  assert.equal(originalAdminUrl(options.siteBase), 'https://api.example.workers.dev/#/admin')
+  assert.equal(resolveAdminUrl({}, options), 'https://api.example.workers.dev/#/admin')
+  assert.equal(
+    resolveAdminUrl({ customAdminEnabled: true }, options),
+    'https://theme.example/admin.html?site=2'
+  )
+  assert.equal(
+    resolveAdminUrl({}, { ...options, preview: true }),
+    'https://theme.example/admin.html?preview=1&site=2'
+  )
 })
