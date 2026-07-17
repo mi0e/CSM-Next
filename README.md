@@ -28,12 +28,14 @@ UI 仿照 [komari-next](https://github.com/tonyliuzj/komari-next) 制作，数�
 - 首页统计、区域筛选、搜索、网格和表格视图
 - CPU、内存、磁盘、网络和流量信息
 - 节点详情页与历史负载图表
-- 四线路 Ping、丢包、波动和鼠标悬浮数据
+- 首页最近 1 小时四线路延迟/丢包时间条，详情页 Ping、丢包、波动和悬浮数据
 - WebSocket 实时更新，断线后自动重连
 - 多个 Worker 数据合并
 - 中文、英文、明暗主题和移动端布局
 - Cloudflare Turnstile
 - 独立登录授权，可查看非公开站点、隐藏节点和长历史
+- 首页右侧主题抽屉：背景 URL/图片上传、独立透明/毛玻璃方案和自定义 CSS
+- Cloudflare KV 自动持久化主题设置，不写入上游 D1
 - 可选实验性主题后台（节点管理、设置、数据库维护，默认关闭）
 
 ## 本地运行
@@ -85,6 +87,8 @@ npm run dev
 4. 构建命令留空，部署命令保持默认的 `npx wrangler deploy`。
 5. 保存并部署。
 
+`wrangler.jsonc` 已声明不带资源 ID 的 `THEME_SETTINGS` binding。首次部署时 Wrangler 会自动创建并绑定 KV namespace，不需要提前运行 `wrangler kv namespace create`，也不需要把账户专属 ID 写进仓库。
+
 ### Cloudflare Worker 配置
 
 1. 进入 **Settings** → **Variables and Secrets**。
@@ -101,6 +105,17 @@ CSM_CUSTOM_ADMIN_ENABLED=true
 ```
 
 未配置或填写 `false` 时，`/admin` 与 `/admin.html` 也会重定向到原站后台。登录授权查看私有内容不受此开关影响。
+
+### 主题自定义
+
+首页顶部齿轮现在打开右侧“主题自定义”抽屉；登录授权按钮位于最右侧。主题抽屉支持：
+
+- 填写 HTTPS 背景图片地址，或上传不超过 2 MB 的 JPG / PNG / WebP / GIF / AVIF。
+- 独立开启界面透明化；可选“柔和透明”（无背景模糊）或“毛玻璃”方案。
+- 分别调整透明强度（0%–80%）与毛玻璃强度（0px–30px）。
+- 添加最多 20,000 字符的自定义 CSS。
+
+读取主题设置是公开的，修改、上传和删除必须先在主题中登录。Worker 会向选中的 CF-Server-Monitor 后端发送无副作用的认证探测，再写入 CSM-Next 自己的 KV；不会调用上游设置写入接口，也不会增加上游 D1 写入。自定义 CSS 禁止 `@import`、`url()`、脚本和其他外部资源加载方式。
 
 ## 测试与构建
 
@@ -140,9 +155,10 @@ CSM-Next/
 
 ## 使用说明
 
-- 首页的线路延迟和丢包来自最近一次采样，不是 24 小时平均值。
+- 首页可见节点会按需读取最近 1 小时历史，将其聚合成 24 个真实时间桶；延迟和丢包均使用 CT/CU/CM/BD 实际上报字段，后续由 WebSocket 增量更新。尚未载入历史时只显示当前四线路采样。
+- 站点标题默认跟随原 CF-Server-Monitor 的 `site_title`；主题配置中的 `title` / `CSM_SITE_TITLE` 仅作为兜底值。
 - 首页和详情页默认读取公开内容；非公开站点、隐藏节点与更长历史可在主题内登录后查看。
-- “管理后台”默认打开当前 CF-Server-Monitor Worker 的原生 `/#/admin`。
+- 顶部齿轮打开主题自定义抽屉；页脚中的“管理后台”入口默认打开当前 CF-Server-Monitor Worker 的原生 `/#/admin`。
 - 设置 `customAdminEnabled: true`（普通静态托管）或 `CSM_CUSTOM_ADMIN_ENABLED=true`（Cloudflare Worker）后，才启用主题自建 `admin.html`。
 - CSM-Next 只保存上游签发的站点隔离 JWT，不保存管理密码或 Secret。
 
@@ -151,6 +167,7 @@ CSM-Next/
 - 后端：[CF-Server-Monitor](https://github.com/huilang-me/CF-Server-Monitor)
 - UI 参考：[komari-next](https://github.com/tonyliuzj/komari-next)
 - 国旗图标：[flag-icons](https://github.com/lipis/flag-icons)
+- 界面图标：[Lucide](https://lucide.dev/)（许可见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)）
 
 CSM-Next 是独立的社区项目，与上述项目维护者没有官方隶属关系。
 

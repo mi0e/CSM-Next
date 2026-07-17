@@ -1,6 +1,7 @@
 import { translations } from './i18n.js'
 import { escapeHtml } from '../shared/dom.js'
 import { createTranslator } from '../shared/i18n.js'
+import { resolveSiteTitle } from '../shared/title.js'
 import { normalizeBase } from '../shared/url.js'
 
 const params = new URLSearchParams(location.search)
@@ -125,6 +126,12 @@ export function updatePageTitle() {
   elements.pageTitle.textContent = t(titles[state.tab] || 'nodeList')
 }
 
+export function updateBrandTitle() {
+  const title = resolveSiteTitle(state.config, state.settings, state.apiConfig)
+  elements.brandTitle.textContent = title
+  document.title = `${t('adminPanel')} · ${title}`
+}
+
 export function openModal(id) {
   const node = $(id)
   if (node) node.hidden = false
@@ -158,8 +165,6 @@ export function applyTranslations() {
     node.title = label
     node.setAttribute('aria-label', label)
   })
-  elements.languageButton.querySelector('span').textContent = state.language === 'zh' ? '文' : 'A'
-  elements.languageButton.querySelector('small').textContent = state.language === 'zh' ? 'A' : '文'
   updatePageTitle()
   if (state.changePassword) elements.togglePasswordChange.textContent = t('cancelPasswordChange')
 }

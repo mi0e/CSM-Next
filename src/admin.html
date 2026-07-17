@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#f8f9fb">
     <title>Admin · CSM-Next</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2317191d'/%3E%3Cpath d='M46 20c-4-4-8-6-14-6-10 0-18 8-18 18s8 18 18 18c6 0 11-2 15-7l-7-6c-2 3-5 4-8 4-5 0-9-4-9-9s4-9 9-9c3 0 6 1 8 4z' fill='white'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="./assets/css/main.css?v=20260717-auth">
+    <link rel="stylesheet" href="./assets/css/main.css?v=20260717-probe-lucide">
     <link rel="stylesheet" href="./assets/css/admin.css?v=20260717-auth">
   </head>
   <body class="admin-body">
@@ -62,17 +62,17 @@
         <header class="admin-topbar">
           <div class="admin-topbar-left">
             <button id="sidebarToggle" class="icon-button admin-menu-btn" type="button" data-i18n-title="menu" title="菜单" aria-label="菜单">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+              <svg class="lucide-icon" data-lucide="menu" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/></svg>
             </button>
             <h1 id="pageTitle" data-i18n="nodeList">节点列表</h1>
           </div>
           <div class="admin-topbar-actions">
             <select id="siteSelect" class="admin-select" hidden aria-label="API site"></select>
             <button id="themeButton" class="icon-button" type="button" data-i18n-title="theme" title="切换主题">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-1.1-.9-2-2-2h-2.1a2 2 0 0 1-1.5-3.3l.3-.4A2 2 0 0 0 14.1 3H12Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="7.8" cy="15" r="1"/></svg>
+              <svg class="lucide-icon" data-lucide="sun-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v2"/><path d="M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715"/><path d="M16 12a4 4 0 0 0-4-4"/><path d="m19 5-1.256 1.256"/><path d="M20 12h2"/></svg>
             </button>
             <button id="languageButton" class="icon-button language-button" type="button" data-i18n-title="language" title="切换语言">
-              <span>文</span><small>A</small>
+              <svg class="lucide-icon" data-lucide="languages" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
             </button>
             <a id="topbarHomeLink" class="admin-btn admin-btn-ghost admin-topbar-home" href="./" data-i18n="backHome">返回前台</a>
             <button id="logoutButton" class="admin-btn admin-btn-ghost" type="button" data-i18n="logout">退出</button>
@@ -379,7 +379,7 @@
 
     <div id="sidebarBackdrop" class="admin-sidebar-backdrop" hidden></div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="./assets/js/admin.js?v=20260717-auth"></script>
+    <script type="module" src="./assets/js/admin.js?v=20260717-probe-lucide"></script>
   </body>
 </html>
 

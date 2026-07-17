@@ -2,7 +2,8 @@ import { getJwt, setJwt } from '../shared/auth.js'
 import { fetchJson, unwrap } from '../shared/http.js'
 import { joinUrl } from '../shared/url.js'
 import {
-  state, elements, t, currentBase, truthy, showToast, showLoginError, setAuthedView
+  state, elements, t, currentBase, truthy, showToast, showLoginError, setAuthedView,
+  updateBrandTitle
 } from './context.js'
 
 export const hooks = { enterApp: null }
@@ -187,6 +188,7 @@ export function loadTurnstileScript() {
 export async function loadApiConfig() {
   if (state.preview) {
     state.apiConfig = { turnstile_login_enabled: false, version: 'preview' }
+    updateBrandTitle()
     return
   }
   try {
@@ -195,6 +197,7 @@ export async function loadApiConfig() {
   } catch {
     state.apiConfig = {}
   }
+  updateBrandTitle()
 }
 
 export async function submitLogin(event) {

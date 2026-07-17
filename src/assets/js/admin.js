@@ -3,7 +3,7 @@ import { isCustomAdminEnabled, originalAdminUrl, resolveAdminUrl } from './share
 import {
   state, elements, $, t, currentBase, showToast, showLoginError,
   applyTheme, applyTranslations, setSidebarOpen, setAuthedView,
-  updatePageTitle, closeModal, renderSiteSelect, buildSites, loadConfig,
+  updatePageTitle, updateBrandTitle, closeModal, renderSiteSelect, buildSites, loadConfig,
   openConfirm, runConfirmAction, copyText
 } from './admin/context.js'
 import {
@@ -167,8 +167,7 @@ async function init() {
     return
   }
   bindEvents()
-  elements.brandTitle.textContent = state.config.title || 'CSM-Next'
-  document.title = `${t('adminPanel')} · ${state.config.title || 'CSM-Next'}`
+  updateBrandTitle()
   applyHomeLinks()
   updateOriginalAdminLink()
   renderSiteSelect()

@@ -33,7 +33,8 @@
   padding: 28px;
   border: 1px solid color-mix(in srgb, var(--red) 30%, var(--line));
   border-radius: 14px;
-  background: var(--surface);
+  background: var(--panel-surface);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-md);
   text-align: center;
 }
@@ -75,7 +76,8 @@
   padding: 24px 30px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--surface);
+  background: var(--panel-surface);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-sm);
 }
 
@@ -189,7 +191,8 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 11px;
-  background: var(--surface);
+  background: var(--panel-surface);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-sm);
 }
 
@@ -273,7 +276,7 @@
 .detail-tab.active,
 .range-switch button.active {
   color: var(--text-strong);
-  background: var(--surface);
+  background: var(--panel-surface);
   box-shadow: var(--shadow-sm);
 }
 
@@ -322,7 +325,8 @@
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--surface);
+  background: var(--panel-surface);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-sm);
 }
 
@@ -494,7 +498,8 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 11px;
-  background: var(--surface);
+  background: var(--panel-surface);
+  backdrop-filter: blur(var(--panel-blur));
   box-shadow: var(--shadow-sm);
 }
 

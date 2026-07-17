@@ -14,7 +14,7 @@ class FakeElement {
   constructor() {
     this.classList = new FakeClassList()
     this.dataset = {}
-    this.style = {}
+    this.style = { setProperty(name, value) { this[name] = String(value) } }
     this.hidden = false
     this.textContent = ''
     this.innerHTML = ''
@@ -96,6 +96,10 @@ if (!cards.includes('lipis/flag-icons@7.3.2/flags/4x3/jp.svg')) {
 if (!cards.includes('gauge-progress') || cards.includes('conic-gradient')) {
   throw new Error('SVG gauge did not render')
 }
+if (!cards.includes('data-probe-source="history"') || (cards.match(/data-probe-bucket=/g) || []).length < 48) {
+  throw new Error('Real one-hour probe history bars did not render')
+}
+if (cards.includes('实时丢包')) throw new Error('Legacy latest-sample loss label is still rendered')
 if (String(total) !== '8' || String(online) !== '7') {
   throw new Error(`Unexpected preview stats: total=${total}, online=${online}`)
 }
@@ -112,10 +116,31 @@ search.dispatch('input')
 nodeFor('#themeButton').dispatch('click')
 if (document.documentElement.dataset.theme !== 'dark') throw new Error('Theme toggle failed')
 
+nodeFor('#themeSettingsButton').dispatch('click')
+if (!nodeFor('#themeDrawer').classList.values.has('is-open')) throw new Error('Theme settings drawer did not open')
+nodeFor('#themeTransparencyEnabled').checked = true
+nodeFor('#themeTransparencyEnabled').dispatch('change')
+if (nodeFor('#themeTransparencyOptions').hidden) throw new Error('Transparency options did not open')
+nodeFor('#themeTransparencySoft').checked = false
+nodeFor('#themeTransparencyGlass').checked = true
+nodeFor('#themeTransparencyGlass').dispatch('change')
+nodeFor('#themeTransparencyIntensity').value = '40'
+nodeFor('#themeTransparencyIntensity').dispatch('input')
+if (nodeFor('#themeTransparencyOutput').textContent !== '40%') throw new Error('Theme transparency output did not update')
+nodeFor('#themePanelBlur').value = '22'
+nodeFor('#themePanelBlur').dispatch('input')
+if (nodeFor('#themeBlurOutput').textContent !== '22px') throw new Error('Theme blur output did not update')
+nodeFor('#themeCustomCss').value = '.brand-title { letter-spacing: .08em; }'
+nodeFor('#themeSettingsForm').dispatch('submit')
+await new Promise(resolvePromise => realSetTimeout(resolvePromise, 20))
+if (document.documentElement.style['--panel-opacity'] !== '60%') throw new Error('Theme opacity was not applied')
+if (document.documentElement.style['--panel-blur'] !== '22px') throw new Error('Theme glass blur was not applied')
+if (!nodeFor('#themeCustomStyle').textContent.includes('letter-spacing')) throw new Error('Custom CSS was not applied safely')
+
 nodeFor('.view-switch').dispatch('click', { target: { closest: () => ({ dataset: { view: 'table' } }) } })
 if (nodeFor('#tableView').hidden || !nodeFor('#gridView').hidden) throw new Error('Table view toggle failed')
 
 nodeFor('#cardGroups').dispatch('click', { target: { closest: () => ({ dataset: { serverKey: '0:preview-1' } }) } })
 if (!location.href.includes('detail.html') || !location.href.includes('id=preview-1')) throw new Error('Card did not route to themed detail page')
 
-console.log('Smoke test passed: render, controls and themed detail routing are working.')
+console.log('Smoke test passed: render, theme drawer, controls and themed detail routing are working.')
