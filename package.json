@@ -7,9 +7,10 @@
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "node scripts/build.mjs",
-    "test": "node --test tests/auth.test.mjs tests/login.test.mjs tests/theme-settings.test.mjs tests/title.test.mjs tests/url.test.mjs tests/http.test.mjs tests/ping.test.mjs tests/probe-history.test.mjs tests/i18n.test.mjs tests/dashboard.test.mjs tests/dashboard-history.test.mjs tests/detail.test.mjs tests/admin.test.mjs tests/worker.test.mjs",
+    "test": "node --test",
     "dev": "node scripts/build.mjs && node scripts/serve.mjs",
     "preview": "node scripts/serve.mjs",
+    "release:theme": "node scripts/release-theme.mjs",
     "cf:dev": "wrangler dev",
     "cf:deploy": "wrangler deploy"
   },

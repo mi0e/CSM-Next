@@ -2,21 +2,24 @@ import { getJwt, setJwt } from './shared/auth.js'
 import { originalAdminUrl, resolveAdminUrl } from './shared/admin.js'
 import { formatBillingPrice } from './shared/billing.js'
 import { escapeHtml } from './shared/dom.js'
+import { flagMarkup } from './shared/flags.js'
 import { fetchJson } from './shared/http.js'
 import {
   getLoginTurnstileToken, loginTurnstileRequired, loginWithCredentials,
   removeLoginTurnstile, renderLoginTurnstile
 } from './shared/login.js'
 import {
-  applyThemeAppearance, loadThemeSettings, saveThemeSettings, uploadThemeBackground
+  applyThemeAppearance, clearThemeSettings, exportSiteThemeSnippet,
+  loadThemeSettings, saveThemeSettings
 } from './shared/theme.js'
 import {
   normalizeThemeSettings, validateThemeSettings
 } from './shared/theme-settings.js'
 import { mergeProbeHistory, pingSparkline, PROBE_LINES } from './shared/probe-history.js'
 import { isPingDisabled, isPingValid, pingLevel } from './shared/ping.js'
-import { resolveSiteTitle } from './shared/title.js'
-import { joinUrl, metaApiBases, normalizeBase } from './shared/url.js'
+import { serverRouteHash } from './shared/route.js'
+import { injectedSiteTitle, resolveSiteTitle } from './shared/title.js'
+import { joinUrl, metaApiBases, metaContent, normalizeBase } from './shared/url.js'
 
 const ONLINE_THRESHOLD = 5 * 60 * 1000
 const DEFAULT_REFRESH_INTERVAL = 60 * 1000
@@ -47,11 +50,9 @@ const translations = {
     language: 'Switch to English',
     admin: '管理后台',
     themeCustomize: '主题自定义', themeSubtitle: '个性化外观', close: '关闭',
-    themeLoginRequired: '登录后即可修改并保存全站主题。',
-    themeAuthorized: '已登录，保存后将应用到所有访客。', themePreviewAuth: '预览模式：修改仅在当前页面生效。',
+    themeLocalHint: '设置保存在当前浏览器，仅对你生效；站长可用下方"复制站点配置"让全站访客默认使用。',
     themeGroupBackground: '背景图片', themeGroupEffects: '界面效果', themeGroupAdvanced: '高级',
-    themeBackground: '图片地址', themeBackgroundHint: '仅允许 HTTPS 图片地址；留空表示不使用背景图。',
-    themeBackgroundUpload: '上传本地图片', themeUploadHint: '支持 JPG、PNG、WebP、GIF、AVIF，最大 2 MB；上传后自动设为背景。',
+    themeBackground: '图片地址', themeBackgroundHint: '仅允许 HTTPS 图片地址；留空表示不使用背景图。跨域图片可能需要站长在上游后台 CSP 名单放行。',
     themeTransparency: '界面透明化', themeTransparencyHint: '独立控制卡片和顶部栏的透明效果。',
     themeTransparencyMode: '透明方案',
     themeTransparencySoft: '柔和透明', themeTransparencySoftHint: '仅透明，不模糊后方内容。',
@@ -59,13 +60,14 @@ const translations = {
     themeTransparencyIntensity: '透明强度', themeTransparencyIntensityHint: '数值越高，卡片和顶部栏越透明。',
     themeBlurIntensity: '毛玻璃强度', themeBlurIntensityHint: '只在毛玻璃方案下生效。',
     themeCustomCss: '自定义 CSS', themeCssHint: '不允许 @import、url() 或脚本；外部资源请使用背景图片设置。',
-    restoreDefaults: '恢复默认', saveTheme: '保存主题', themeSaved: '主题设置已保存',
-    themePreviewSaved: '预览样式已应用，刷新页面后恢复', themeSaveFailed: '主题设置保存失败',
+    restoreDefaults: '恢复默认', saveTheme: '保存主题', themeSaved: '主题设置已保存到本浏览器',
+    themeRestored: '已恢复站点默认主题', themeSaveFailed: '主题设置保存失败',
+    themeExport: '复制站点配置', themeExportHint: '站长专用：复制后粘贴到上游后台「设置 → 自定义脚本」，保存后全站访客默认使用当前主题。',
+    themeExportCopied: '站点配置已复制，请粘贴到上游后台的自定义脚本设置',
+    themeExportFailed: '复制失败，请手动复制',
     themeBackgroundInvalid: '背景图片必须是完整的 HTTPS 地址',
     themeOpacityInvalid: '透明强度必须在 0% 到 80% 之间', themeBlurInvalid: '毛玻璃强度必须在 0px 到 30px 之间',
     themeCssUnsafe: '自定义 CSS 不能加载外部资源或包含危险指令',
-    themeFileInvalid: '请选择 2 MB 以内的 JPG、PNG、WebP、GIF 或 AVIF 图片',
-    themeUploadPreview: '本地预览无法保存上传图片，请部署后再试',
     authorize: '登录授权',
     loginTitle: '登录授权',
     loginMessage: '登录后可查看非公开站点、隐藏节点和长历史数据。',
@@ -89,7 +91,7 @@ const translations = {
     noServerData: '暂时没有服务器数据',
     noServerDataHint: '请先在管理后台添加节点，或检查 API 地址配置。',
     loadFailedTitle: '无法读取监控数据',
-    loadFailed: '请检查 config.json 中的 apiBase、后端 CORS 设置和站点公开状态。',
+    loadFailed: '请检查 apiBase 配置（meta 标签或同源部署）、后端 CORS 设置和站点公开状态。',
     unauthorized: '当前站点需要在主题中授权后才能查看。',
     privateSitesTitle: '部分站点需要登录',
     privateSites: '有 {count} 个站点尚未授权；登录后会自动补充私有节点。',
@@ -140,11 +142,9 @@ const translations = {
     language: '切换到中文',
     admin: 'Admin',
     themeCustomize: 'Customize theme', themeSubtitle: 'Personalize appearance', close: 'Close',
-    themeLoginRequired: 'Sign in to customize and save the site-wide theme.',
-    themeAuthorized: 'Signed in. Saved changes will apply to every visitor.', themePreviewAuth: 'Preview mode: changes apply to this page only.',
+    themeLocalHint: 'Settings are saved in this browser and only affect you. Site owners can use "Copy site config" below to make them the default for every visitor.',
     themeGroupBackground: 'Background', themeGroupEffects: 'Interface effects', themeGroupAdvanced: 'Advanced',
-    themeBackground: 'Image URL', themeBackgroundHint: 'HTTPS image URLs only. Leave empty for no background.',
-    themeBackgroundUpload: 'Upload local image', themeUploadHint: 'JPG, PNG, WebP, GIF, or AVIF up to 2 MB. The upload becomes the background.',
+    themeBackground: 'Image URL', themeBackgroundHint: 'HTTPS image URLs only. Leave empty for no background. Cross-origin images may need a CSP allowlist entry in the upstream admin.',
     themeTransparency: 'Interface transparency', themeTransparencyHint: 'Controls transparency for cards and the top bar independently.',
     themeTransparencyMode: 'Transparency style',
     themeTransparencySoft: 'Soft', themeTransparencySoftHint: 'Transparent without blurring content behind it.',
@@ -152,13 +152,14 @@ const translations = {
     themeTransparencyIntensity: 'Transparency intensity', themeTransparencyIntensityHint: 'Higher values make cards and the top bar more transparent.',
     themeBlurIntensity: 'Glass blur intensity', themeBlurIntensityHint: 'Only applies to the Glass style.',
     themeCustomCss: 'Custom CSS', themeCssHint: '@import, url(), and scripts are blocked. Use the background field for external images.',
-    restoreDefaults: 'Restore defaults', saveTheme: 'Save theme', themeSaved: 'Theme settings saved',
-    themePreviewSaved: 'Preview styles applied until the page is refreshed.', themeSaveFailed: 'Unable to save theme settings',
+    restoreDefaults: 'Restore defaults', saveTheme: 'Save theme', themeSaved: 'Theme settings saved in this browser',
+    themeRestored: 'Site default theme restored', themeSaveFailed: 'Unable to save theme settings',
+    themeExport: 'Copy site config', themeExportHint: 'Owner only: paste the copied snippet into the upstream admin "custom script" box to make this theme the default for all visitors.',
+    themeExportCopied: 'Site config copied. Paste it into the upstream admin custom-script setting.',
+    themeExportFailed: 'Copy failed. Please copy manually.',
     themeBackgroundInvalid: 'The background image must be a complete HTTPS URL',
     themeOpacityInvalid: 'Transparency intensity must be between 0% and 80%', themeBlurInvalid: 'Glass blur must be between 0px and 30px',
     themeCssUnsafe: 'Custom CSS cannot load external resources or contain unsafe directives',
-    themeFileInvalid: 'Choose a JPG, PNG, WebP, GIF, or AVIF image no larger than 2 MB',
-    themeUploadPreview: 'Local preview cannot save uploaded images. Try again after deployment.',
     authorize: 'Authorize',
     loginTitle: 'Sign in',
     loginMessage: 'Sign in to view private sites, hidden nodes, and longer history.',
@@ -182,7 +183,7 @@ const translations = {
     noServerData: 'No server data yet',
     noServerDataHint: 'Add a node in Admin or check the configured API endpoint.',
     loadFailedTitle: 'Unable to load monitoring data',
-    loadFailed: 'Check apiBase in config.json, backend CORS settings, and public access.',
+    loadFailed: 'Check the apiBase meta tag (or same-origin deploy), backend CORS settings, and public access.',
     unauthorized: 'This site requires authorization in the theme before it can be viewed.',
     privateSitesTitle: 'Some sites require sign-in',
     privateSites: '{count} site(s) are not authorized. Private nodes will appear after sign-in.',
@@ -212,46 +213,51 @@ const translations = {
   }
 }
 
-const state = {
-  config: {},
-  sites: [],
-  servers: [],
-  siteConfigs: [],
-  stats: {
-    total: 0,
-    online: 0,
-    offline: 0,
-    globalNetRx: 0,
-    globalNetTx: 0,
-    globalSpeedIn: 0,
-    globalSpeedOut: 0
-  },
-  regions: {},
-  filter: 'all',
-  query: '',
-  view: localStorage.getItem('csm-next-view') || 'grid',
-  language: localStorage.getItem('csm-next-language') || (navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'),
-  theme: localStorage.getItem('csm-next-theme') || 'light',
-  sockets: [],
-  socketOnline: 0,
-  loading: false,
-  preview: new URLSearchParams(location.search).get('preview') === '1',
-  renderTimer: null,
-  refreshTimer: null,
-  clockTimer: null,
-  loginSiteIndex: 0,
-  loginBusy: false,
-  loginTurnstileWidgetId: null,
-  unauthorizedSiteIndexes: [],
-  upstreamTitle: '',
-  themeSettings: normalizeThemeSettings(),
-  themeSettingsLoaded: false,
-  themeSettingsBusy: false,
-  themeDrawerOpen: false,
-  probeHistories: new Map()
+let state
+let elements
+
+function createState() {
+  return {
+    config: {},
+    sites: [],
+    servers: [],
+    siteConfigs: [],
+    stats: {
+      total: 0,
+      online: 0,
+      offline: 0,
+      globalNetRx: 0,
+      globalNetTx: 0,
+      globalSpeedIn: 0,
+      globalSpeedOut: 0
+    },
+    regions: {},
+    filter: 'all',
+    query: '',
+    view: localStorage.getItem('csm-next-view') || 'grid',
+    language: localStorage.getItem('csm-next-language') || (navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'),
+    theme: localStorage.getItem('csm-next-theme') || 'light',
+    sockets: [],
+    socketOnline: 0,
+    loading: false,
+    preview: new URLSearchParams(location.search).get('preview') === '1',
+    renderTimer: null,
+    refreshTimer: null,
+    clockTimer: null,
+    loginSiteIndex: 0,
+    loginBusy: false,
+    loginTurnstileWidgetId: null,
+    unauthorizedSiteIndexes: [],
+    upstreamTitle: '',
+    themeSettings: normalizeThemeSettings(),
+    themeSettingsLoaded: false,
+    themeSettingsBusy: false,
+    themeDrawerOpen: false,
+    probeHistories: new Map()
+  }
 }
 
-const elements = {
+const queryElements = () => ({
   brandTitle: document.querySelector('#brandTitle'),
   siteEyebrow: document.querySelector('#siteEyebrow'),
   footerAdminLink: document.querySelector('#footerAdminLink'),
@@ -303,13 +309,9 @@ const elements = {
   themeDrawer: document.querySelector('#themeDrawer'),
   themeDrawerBackdrop: document.querySelector('#themeDrawerBackdrop'),
   themeDrawerClose: document.querySelector('#themeDrawerClose'),
-  themeSettingsAuth: document.querySelector('#themeSettingsAuth'),
-  themeSettingsAuthText: document.querySelector('#themeSettingsAuthText'),
-  themeSettingsLogin: document.querySelector('#themeSettingsLogin'),
   themeSettingsForm: document.querySelector('#themeSettingsForm'),
   themeSettingsFields: document.querySelector('#themeSettingsFields'),
   themeBackgroundImage: document.querySelector('#themeBackgroundImage'),
-  themeBackgroundUpload: document.querySelector('#themeBackgroundUpload'),
   themeTransparencyEnabled: document.querySelector('#themeTransparencyEnabled'),
   themeTransparencyOptions: document.querySelector('#themeTransparencyOptions'),
   themeTransparencySoft: document.querySelector('#themeTransparencySoft'),
@@ -322,10 +324,11 @@ const elements = {
   themeCustomCss: document.querySelector('#themeCustomCss'),
   themeSettingsError: document.querySelector('#themeSettingsError'),
   themeSettingsReset: document.querySelector('#themeSettingsReset'),
+  themeSettingsExport: document.querySelector('#themeSettingsExport'),
   themeSettingsSave: document.querySelector('#themeSettingsSave'),
   toast: document.querySelector('#toast'),
   themeColor: document.querySelector('meta[name="theme-color"]')
-}
+})
 
 function t(key, params = {}) {
   const dictionary = translations[state.language] || translations.zh
@@ -391,11 +394,12 @@ function percentage(used, total) {
   return clamp((used / total) * 100)
 }
 
-function flagMarkup(region, compact = false) {
-  const code = String(region || '').trim().toUpperCase()
-  if (!/^[A-Z]{2}$/.test(code) || code === 'XX') return '<span class="flag-code">--</span>'
-  const lower = code.toLowerCase()
-  return `<img class="region-flag" src="https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.3.2/flags/4x3/${lower}.svg" alt="" loading="lazy" referrerpolicy="no-referrer"><span class="flag-code" hidden>${escapeHtml(code)}</span>`
+function siteBaseFor(siteIndex = 0) {
+  return state.sites[siteIndex]?.base || state.sites[0]?.base || ''
+}
+
+function regionFlag(region, siteIndex = 0) {
+  return flagMarkup(region, siteBaseFor(siteIndex))
 }
 
 function shortOs(value) {
@@ -443,12 +447,8 @@ function expiryLabel(value) {
 }
 
 function detailUrl(server) {
-  const url = new URL('./detail.html', location.href)
-  url.search = ''
-  url.searchParams.set('id', server.id)
-  url.searchParams.set('site', String(server._siteIndex || 0))
-  if (state.preview) url.searchParams.set('preview', '1')
-  return url.href
+  // Hash navigation keeps location.search (e.g. ?preview=1) untouched.
+  return serverRouteHash(server.id, server._siteIndex || 0)
 }
 
 function adminUrl(siteIndex = 0) {
@@ -518,7 +518,6 @@ function applyTranslations() {
     node.setAttribute('aria-label', text)
   })
   updateAuthButton()
-  updateThemeDrawerAuthState()
   if (elements.loginModal && !elements.loginModal.hidden) updateLoginModalState({ refreshTurnstile: false })
 }
 
@@ -554,22 +553,16 @@ function updateConnectionState(mode) {
   elements.liveState.querySelector('em').textContent = label
 }
 
-async function loadRuntimeConfig() {
-  let config = {}
-  try {
-    const response = await fetch('./config.json', { cache: 'no-store' })
-    if (!response.ok) throw new Error(`config.json: HTTP ${response.status}`)
-    config = await response.json() || {}
-  } catch (error) {
-    console.warn('[theme] config.json could not be loaded, trying <meta name="apiBase"> and same-origin defaults.', error)
-  }
-  const configured = (Array.isArray(config.apiBase) ? config.apiBase : config.apiBase ? [config.apiBase] : []).filter(Boolean)
+// Upstream convention: config.json is deprecated. API bases come from the
+// `apiBase` meta (standalone static deploys) or default to same-origin
+// (theme-store deploys). The injected <title> doubles as the title fallback
+// until /api/servers returns the authoritative site_title.
+function loadRuntimeConfig() {
   return {
-    title: 'CF-Server-Monitor',
+    title: injectedSiteTitle(),
     backgroundImage: '',
-    customAdminEnabled: false,
-    ...config,
-    apiBase: configured.length ? configured : metaApiBases()
+    refreshInterval: Number(metaContent('refreshInterval')) || 0,
+    apiBase: metaApiBases()
   }
 }
 
@@ -742,15 +735,6 @@ function updateAuthButton() {
   const label = authorized ? t('authorizedMessage') : t('authorize')
   elements.authButton.title = label
   elements.authButton.setAttribute('aria-label', label)
-  updateThemeDrawerAuthState()
-}
-
-function themeSettingsAuthSite() {
-  return state.sites.find(site => Boolean(getJwt(site.base))) || null
-}
-
-function canEditThemeSettings() {
-  return state.preview || Boolean(themeSettingsAuthSite())
 }
 
 function setThemeSettingsError(message = '') {
@@ -779,7 +763,6 @@ function updateThemeTransparencyControls({ initializeIntensity = false } = {}) {
 function populateThemeSettingsForm() {
   if (!elements.themeSettingsForm) return
   elements.themeBackgroundImage.value = state.themeSettings.backgroundImage || ''
-  elements.themeBackgroundUpload.value = ''
   elements.themeTransparencyEnabled.checked = Boolean(state.themeSettings.transparencyEnabled)
   elements.themeTransparencyGlass.checked = state.themeSettings.transparencyMode === 'glass'
   elements.themeTransparencySoft.checked = !elements.themeTransparencyGlass.checked
@@ -790,28 +773,24 @@ function populateThemeSettingsForm() {
   setThemeSettingsError('')
 }
 
-function updateThemeDrawerAuthState() {
-  if (!elements.themeSettingsAuth) return
-  const editable = canEditThemeSettings()
-  elements.themeSettingsAuth.classList.toggle('is-authorized', editable)
-  elements.themeSettingsAuthText.textContent = t(state.preview ? 'themePreviewAuth' : editable ? 'themeAuthorized' : 'themeLoginRequired')
-  elements.themeSettingsLogin.hidden = editable
-  elements.themeSettingsFields.disabled = !editable || state.themeSettingsBusy
-  elements.themeSettingsReset.disabled = !editable || state.themeSettingsBusy
-  elements.themeSettingsSave.disabled = !editable || state.themeSettingsBusy
+function updateThemeDrawerBusy() {
+  if (!elements.themeSettingsFields) return
+  elements.themeSettingsFields.disabled = state.themeSettingsBusy
+  elements.themeSettingsReset.disabled = state.themeSettingsBusy
+  if (elements.themeSettingsExport) elements.themeSettingsExport.disabled = state.themeSettingsBusy
+  elements.themeSettingsSave.disabled = state.themeSettingsBusy
 }
 
 function openThemeDrawer() {
   state.themeDrawerOpen = true
   populateThemeSettingsForm()
-  updateThemeDrawerAuthState()
+  updateThemeDrawerBusy()
   elements.themeDrawer.classList.add('is-open')
   elements.themeDrawerBackdrop.classList.add('is-open')
   elements.themeDrawer.setAttribute('aria-hidden', 'false')
   elements.themeDrawerBackdrop.setAttribute('aria-hidden', 'false')
   document.body.classList.add('theme-drawer-open')
-  const target = canEditThemeSettings() ? elements.themeBackgroundImage : elements.themeSettingsLogin
-  const focus = () => target?.focus?.()
+  const focus = () => elements.themeBackgroundImage?.focus?.()
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(focus)
   else setTimeout(focus, 0)
 }
@@ -843,69 +822,60 @@ function themeSettingsErrorMessage(error) {
   if (error?.code === 'invalid_panel_opacity') return t('themeOpacityInvalid')
   if (error?.code === 'invalid_panel_blur') return t('themeBlurInvalid')
   if (error?.code === 'unsafe_custom_css' || error?.code === 'invalid_custom_css') return t('themeCssUnsafe')
-  if (error?.code === 'invalid_background_file' || error?.code === 'background_file_too_large') return t('themeFileInvalid')
   return error?.message || t('themeSaveFailed')
 }
 
-async function submitThemeSettings(event) {
+function submitThemeSettings(event) {
   event?.preventDefault?.()
   if (state.themeSettingsBusy) return
-  if (!canEditThemeSettings()) {
-    openLoginModal(preferredLoginSiteIndex())
-    return
-  }
-
   state.themeSettingsBusy = true
-  updateThemeDrawerAuthState()
+  updateThemeDrawerBusy()
   setThemeSettingsError('')
   try {
-    let input = validateThemeSettings(themeSettingsFromForm())
-    const backgroundFile = elements.themeBackgroundUpload.files?.[0]
-    if (state.preview) {
-      if (backgroundFile) throw Object.assign(new Error(t('themeUploadPreview')), { code: 'preview_upload_unavailable' })
-      state.themeSettings = { ...input, updatedAt: '', storage: 'preview' }
-      state.themeSettingsLoaded = true
-      applyThemeAppearance(state.themeSettings)
-      showToast(t('themePreviewSaved'))
-      return
-    }
-
-    const site = themeSettingsAuthSite()
-    const token = site ? getJwt(site.base) : ''
-    if (backgroundFile) {
-      const backgroundImage = await uploadThemeBackground(backgroundFile, {
-        token,
-        siteIndex: site?.index || 0
-      })
-      input = validateThemeSettings({ ...input, backgroundImage })
-    }
-    state.themeSettings = await saveThemeSettings(input, {
-      token,
-      siteIndex: site?.index || 0
-    })
+    state.themeSettings = saveThemeSettings(themeSettingsFromForm())
     state.themeSettingsLoaded = true
     applyThemeAppearance(state.themeSettings)
     populateThemeSettingsForm()
     showToast(t('themeSaved'))
   } catch (error) {
-    if (error?.status === 401) {
-      const site = themeSettingsAuthSite()
-      if (site) setJwt('', site.base)
-      updateAuthButton()
-      openLoginModal(site?.index ?? preferredLoginSiteIndex())
-    }
     setThemeSettingsError(themeSettingsErrorMessage(error))
   } finally {
     state.themeSettingsBusy = false
-    updateThemeDrawerAuthState()
+    updateThemeDrawerBusy()
   }
 }
 
-async function loadPersistedThemeSettings() {
-  const fallback = { backgroundImage: state.config.backgroundImage || '', panelOpacity: 1 }
-  state.themeSettings = state.preview
-    ? { ...normalizeThemeSettings({}, fallback), storage: 'preview', updatedAt: '' }
-    : await loadThemeSettings(fallback)
+function restoreThemeDefaults() {
+  if (state.themeSettingsBusy) return
+  clearThemeSettings()
+  state.themeSettings = loadThemeSettings(themeSettingsFallback())
+  state.themeSettingsLoaded = true
+  applyThemeAppearance(state.themeSettings)
+  populateThemeSettingsForm()
+  showToast(t('themeRestored'))
+}
+
+async function copySiteThemeSnippet() {
+  setThemeSettingsError('')
+  try {
+    const snippet = exportSiteThemeSnippet(themeSettingsFromForm())
+    await navigator.clipboard.writeText(snippet)
+    showToast(t('themeExportCopied'))
+  } catch (error) {
+    if (error?.code) {
+      setThemeSettingsError(themeSettingsErrorMessage(error))
+      return
+    }
+    setThemeSettingsError(t('themeExportFailed'))
+  }
+}
+
+function themeSettingsFallback() {
+  return { backgroundImage: state.config.backgroundImage || '', panelOpacity: 1 }
+}
+
+function loadPersistedThemeSettings() {
+  state.themeSettings = loadThemeSettings(themeSettingsFallback())
   state.themeSettingsLoaded = true
   applyThemeAppearance(state.themeSettings)
   populateThemeSettingsForm()
@@ -1252,7 +1222,7 @@ function renderFilters() {
   elements.filterBar.innerHTML = filters.map(([code, count]) => {
     const active = state.filter === code
     const label = code === 'all' ? t('all') : code === 'XX' ? t('unknown') : code
-    const icon = code === 'all' ? '<span class="filter-dot"></span>' : `<span class="flag">${flagMarkup(code, true)}</span>`
+    const icon = code === 'all' ? '<span class="filter-dot"></span>' : `<span class="flag">${regionFlag(code)}</span>`
     return `<button class="filter-chip${active ? ' active' : ''}" type="button" data-filter="${escapeHtml(code)}" aria-pressed="${active}">${icon}<span>${escapeHtml(label)}</span><small>${count}</small></button>`
   }).join('')
 }
@@ -1324,7 +1294,7 @@ function cardMarkup(server) {
   return `<article class="server-card${online ? '' : ' offline'}" tabindex="0" role="link" data-server-key="${escapeHtml(server._sourceKey)}" aria-label="${escapeHtml(server.name)}">
     <header class="server-card-header">
       <div class="server-card-top">
-        <div class="server-identity"><span class="server-flag" aria-hidden="true">${flagMarkup(server.region)}</span><span class="server-name">${escapeHtml(server.name || server.id)}</span></div>
+        <div class="server-identity"><span class="server-flag" aria-hidden="true">${regionFlag(server.region, server._siteIndex)}</span><span class="server-name">${escapeHtml(server.name || server.id)}</span></div>
         <div class="server-card-actions"><svg class="trend-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16 5-5 4 3 7-7"/><path d="M15 7h5v5"/></svg><span class="status-pill${online ? '' : ' offline'}">${online ? t('online') : t('offline')}</span></div>
       </div>
       <div class="server-subline"><span class="os-chip">${escapeHtml(shortOs(server.os))}</span><span class="subline-divider">·</span><span class="uptime-text">${t('uptime')} ${escapeHtml(formatUptime(server))}</span></div>
@@ -1390,7 +1360,7 @@ function renderTable() {
     const disk = percentage(Number(server.disk_used), Number(server.disk_total))
     return `<tr tabindex="0" data-server-key="${escapeHtml(server._sourceKey)}">
       <td><span class="table-status${online ? '' : ' offline'}">${online ? t('online') : t('offline')}</span></td>
-      <td><span class="table-node"><span class="table-flag" aria-hidden="true">${flagMarkup(server.region, true)}</span>${escapeHtml(server.name || server.id)}</span></td>
+      <td><span class="table-node"><span class="table-flag" aria-hidden="true">${regionFlag(server.region, server._siteIndex)}</span>${escapeHtml(server.name || server.id)}</span></td>
       <td>${escapeHtml(String(server.region || 'XX').toUpperCase())}</td>
       <td>${escapeHtml(`${shortOs(server.os)} / ${server.arch || 'N/A'}`)}</td>
       <td>${meterMarkup(server.cpu)}</td>
@@ -1455,7 +1425,7 @@ function findServer(key) {
 function openServerFromElement(element) {
   const key = element?.dataset?.serverKey
   const server = findServer(key)
-  if (server) location.href = detailUrl(server)
+  if (server) location.hash = detailUrl(server)
 }
 
 function scheduleRender() {
@@ -1558,8 +1528,22 @@ function connectSockets() {
   state.sites.forEach(connectSocket)
 }
 
+let globalListeners = []
+
+function addGlobalListener(target, type, handler, options) {
+  target.addEventListener(type, handler, options)
+  globalListeners.push({ target, type, handler, options })
+}
+
+function removeGlobalListeners() {
+  for (const { target, type, handler, options } of globalListeners) {
+    target.removeEventListener(type, handler, options)
+  }
+  globalListeners = []
+}
+
 function bindEvents() {
-  document.addEventListener('error', event => {
+  addGlobalListener(document, 'error', event => {
     const image = event.target
     if (!image?.classList?.contains('region-flag')) return
     image.hidden = true
@@ -1575,8 +1559,8 @@ function bindEvents() {
   elements.themeSettingsButton.addEventListener('click', openThemeDrawer)
   elements.themeDrawerClose.addEventListener('click', closeThemeDrawer)
   elements.themeDrawerBackdrop.addEventListener('click', closeThemeDrawer)
-  elements.themeSettingsLogin.addEventListener('click', () => openLoginModal(preferredLoginSiteIndex()))
   elements.themeSettingsForm.addEventListener('submit', submitThemeSettings)
+  elements.themeSettingsExport?.addEventListener('click', copySiteThemeSnippet)
   elements.themeTransparencyEnabled.addEventListener('change', () => {
     updateThemeTransparencyControls({ initializeIntensity: true })
   })
@@ -1584,18 +1568,7 @@ function bindEvents() {
   elements.themeTransparencyGlass.addEventListener('change', updateThemeTransparencyControls)
   elements.themeTransparencyIntensity.addEventListener('input', updateThemeTransparencyControls)
   elements.themePanelBlur.addEventListener('input', updateThemeTransparencyControls)
-  elements.themeSettingsReset.addEventListener('click', () => {
-    elements.themeBackgroundImage.value = ''
-    elements.themeBackgroundUpload.value = ''
-    elements.themeTransparencyEnabled.checked = false
-    elements.themeTransparencySoft.checked = true
-    elements.themeTransparencyGlass.checked = false
-    elements.themeTransparencyIntensity.value = '0'
-    elements.themePanelBlur.value = '18'
-    elements.themeCustomCss.value = ''
-    updateThemeTransparencyControls()
-    setThemeSettingsError('')
-  })
+  elements.themeSettingsReset.addEventListener('click', restoreThemeDefaults)
   elements.themeButton.addEventListener('click', () => {
     state.theme = state.theme === 'light' ? 'dark' : 'light'
     localStorage.setItem('csm-next-theme', state.theme)
@@ -1661,12 +1634,12 @@ function bindEvents() {
   elements.loginModal.addEventListener('click', event => {
     if (event.target === elements.loginModal) closeLoginModal()
   })
-  document.addEventListener('keydown', event => {
+  addGlobalListener(document, 'keydown', event => {
     if (event.key !== 'Escape') return
     if (!elements.loginModal.hidden) closeLoginModal()
     else if (state.themeDrawerOpen) closeThemeDrawer()
   })
-  window.addEventListener('beforeunload', closeSockets)
+  addGlobalListener(window, 'beforeunload', closeSockets)
 }
 
 async function init() {
@@ -1678,7 +1651,7 @@ async function init() {
   updateConnectionState('polling')
   state.config = await loadRuntimeConfig()
   applyConfig()
-  await loadPersistedThemeSettings()
+  loadPersistedThemeSettings()
 
   try {
     if (state.preview) {
@@ -1707,4 +1680,20 @@ async function init() {
   }, 1000)
 }
 
-init()
+function destroy() {
+  closeSockets()
+  clearTimeout(state.renderTimer)
+  clearInterval(state.refreshTimer)
+  clearInterval(state.clockTimer)
+  clearTimeout(showToast.timer)
+  destroyLoginTurnstile()
+  document.body.classList.remove('theme-drawer-open')
+  removeGlobalListeners()
+}
+
+export async function mount() {
+  state = createState()
+  elements = queryElements()
+  await init()
+  return { destroy }
+}

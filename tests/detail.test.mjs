@@ -48,8 +48,8 @@ Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { la
 Object.defineProperty(globalThis, 'location', {
   configurable: true,
   value: {
-    origin: 'http://127.0.0.1:4173', href: 'http://127.0.0.1:4173/detail.html?id=preview-2&site=0&preview=1',
-    search: '?id=preview-2&site=0&preview=1', reload: () => {}
+    origin: 'http://127.0.0.1:4173', href: 'http://127.0.0.1:4173/?preview=1#/server/preview-2',
+    search: '?preview=1', hash: '#/server/preview-2', reload: () => {}
   }
 })
 
@@ -65,7 +65,8 @@ const realSetTimeout = globalThis.setTimeout
 globalThis.setInterval = () => 1
 globalThis.clearInterval = () => {}
 
-await import(`${new URL('../src/assets/js/detail.js', import.meta.url).href}?smoke=${Date.now()}`)
+const { mount } = await import(`${new URL('../src/assets/js/detail.js', import.meta.url).href}?smoke=${Date.now()}`)
+await mount({ name: 'server', id: 'preview-2', siteIndex: 0 })
 await new Promise(resolve => realSetTimeout(resolve, 80))
 
 if (nodeFor('#detailContent').hidden) throw new Error('Detail content did not become visible')

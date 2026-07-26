@@ -1,0 +1,45 @@
+name: Publish theme-dist
+
+# push main → 测试 → 纯净构建 → 把 index.html + assets/ 追加提交到 theme-dist 分支。
+# 上游主题商店从该分支的 raw 文件拉取主题(缓存 1 小时)。
+# 产物无变化时 release 脚本会跳过提交,docs-only 的推送不会产生空发布。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: theme-dist-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 构建与测试零 npm 依赖,无需 npm ci
+      - name: Test
+        run: npm test
+
+      - name: Prepare git identity and theme-dist branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin theme-dist:theme-dist || echo "theme-dist branch does not exist yet"
+
+      - name: Build and commit theme-store artifacts
+        run: node scripts/release-theme.mjs
+
+      - name: Push theme-dist
+        run: git push origin theme-dist

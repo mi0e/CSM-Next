@@ -1,53 +1,60 @@
-﻿# Architecture
+# Architecture
 
-## 数据流
+## 总体形态
+
+CSM-Next 是**纯静态单页应用**:一个 `index.html` 内嵌两个视图模板(仪表盘、节点详情),`app.js` 按 hash 路由挂载/销毁视图。没有任何服务端代码——同一份产物既可被上游 CF-Server-Monitor 的主题商店代理(同源),也可独立静态托管(跨域 + meta apiBase)。
 
 ```text
-CSM-Next Cloudflare Worker / 静态托管主题
-  ├─ GET /api/theme-settings → CSM-Next KV
-  ├─ PUT /api/theme-settings → 验证上游 JWT → CSM-Next KV
-  ├─ GET/PUT /api/theme-background → CSM-Next KV
-  ├─ GET /api/config
-  ├─ GET /api/servers
-  ├─ GET /api/server?id=...
-  ├─ GET /api/history/all?id=...&hours=...
-  └─ WebSocket /api/ws
-           ↓
-CF-Server-Monitor Worker / D1 / Durable Object
+index.html (#/ 仪表盘, #/server/:id 详情)
+  ├─ GET  /api/config                ─┐
+  ├─ GET  /api/servers                │ 上游 CF-Server-Monitor
+  ├─ GET  /api/server?id=...          │ Worker / D1 / Durable Object
+  ├─ GET  /api/history/all?id=...     │
+  ├─ WebSocket /api/ws               ─┘
+  ├─ IMG  /flags/<code>.svg、/os-icons/*(上游静态资产)
+  └─ 主题设置:localStorage + window.__CSM_THEME__(无任何主题侧 API)
 ```
 
-监控页面仍是静态前端，不保存管理密码。Cloudflare 部署额外提供一个很小的主题设置 API：KV 保存外观 JSON 与单张背景图片，写入前通过上游 JWT 验证身份。外观 JSON 分别保存透明化开关、柔和/毛玻璃模式、面板不透明度与模糊强度；旧版只有 `panelOpacity` 的数据会兼容迁移为原有毛玻璃效果。默认管理入口跳转原 CF-Server-Monitor 的 `/#/admin`；设置 `customAdminEnabled` 后才启用实验性 `admin.html`。主题设置不改上游 D1 / Worker 核心逻辑。
+## 路由
 
-首页探针时间条只为进入视口的节点按需请求 `hours=1` 历史，同时最多加载 4 个节点。每个节点在当前页面只初始化一次，并在浏览器会话中短时缓存；随后利用已有 WebSocket 样本维护滚动一小时窗口，普通 60 秒刷新不会重复读取历史。每个时间条由 24 个真实时间桶组成，缺少采样的桶显示为空，不用当前值重复填充。
+- `app.js` 是唯一入口:解析 `location.hash` → 销毁旧视图 → 从 `<template>` 克隆新视图 DOM → 动态 `import()` 对应模块并调用其 `mount(route)`。
+- 同一时刻文档中只存在一个视图的 DOM,两个模板可以安全共用元素 id。
+- 每次路由切换视图完全重建(与旧多页架构的跳转行为一致);`mount` 返回 `{ destroy }`,负责关闭 WebSocket、清定时器、移除 document/window 级监听。
+- 旧链接 `detail.html?id=x&site=y` 有两层兜底:商店模式下所有路径都返回 index.html,`app.js` 检测 pathname 后 `location.replace` 到 `#/server/x`;独立部署下 `dist/detail.html` 是一个跳转 stub。
 
-通过 Cloudflare Workers 部署时，`worker/index.js` 负责页面路由、`config.json`、主题设置和背景图片接口；CSS、JavaScript 等文件由 Workers Static Assets 直接提供。它不会代理监控数据 API，认证探测也不会返回上游设置或 Secret。
+## 主题设置的两层模型
+
+`shared/theme.js` 维护两层设置,优先级 **访客 > 站长 > 内置默认**:
+
+1. **站长层**:站长在抽屉里调好样式后点「复制站点配置」,把 `window.__CSM_THEME__ = {...};` 片段粘贴到上游后台「设置 → 自定义脚本」。上游 Worker 会把它注入到每个页面,所有访客把它当作默认外观。独立部署则把同一片段放进托管页面。
+2. **访客层**:抽屉「保存主题」写入当前浏览器 `localStorage`(key `csm-next-theme-settings`),只影响本人;「恢复默认」清除本层,回落站长层。
+
+两层数据都经过 `theme-settings.js` 的同一套校验(HTTPS 背景、透明度/模糊范围、自定义 CSS 禁 `@import`/`url()`/脚本),注入层即使被站长写坏也会被 normalize 兜底。
+
+## 与上游的集成约定
+
+- **同源优先**:没有 `<meta name="apiBase">` 时,一切 API 与 WebSocket 走 `location.origin`。商店模式因此零配置,且与上游后台共享 `jwt_token` 登录态(`shared/auth.js` 的 legacy 共存逻辑)。
+- **标题回退链**:API `site_title` > 启动时页面上的 `<title>`(商店模式由上游注入、独立模式由构建写入,`injectedSiteTitle()` 首次读取后缓存,避免视图改标题后污染)> 内置默认。
+- **管理入口**:固定跳 `<siteBase>/admin#admin`(上游内置前端),主题不实现任何管理页。
+- **旗帜/OS 图标**:`shared/flags.js` 从站点 apiBase 源加载 `/flags/<小写码>.svg`,加载失败回退文字区域码;不打包图标文件(上游商店约定)。
+- **CSP**:商店模式下上游注入严格 CSP。主题自身零外部依赖(图标内联 SVG、无 CDN、无字体),唯一受影响的是站长配置的外域背景图,需在上游后台 `csp_static` 放行。
 
 ## 目录职责
 
-- `src/index.html`、`src/detail.html`：默认页面入口；`src/admin.html` 是开关控制的可选实验后台。
-- `src/assets/js/`：仪表盘、详情页与管理后台入口逻辑。
-- `src/assets/js/admin/`：管理后台分域模块（i18n / context / api / servers / settings）。
-- `src/assets/js/shared/`：跨页共享模块（JWT、HTTP、主题设置、URL/背景图校验、DOM 转义、i18n、测点字段与探针历史聚合）。
-- `src/assets/css/`：共享样式、详情页与后台样式。
-- `worker/`：Cloudflare Worker 路由、运行时配置与 KV 主题设置接口。
-- `config/`：公开示例配置和被忽略的本地配置。
-- `tests/`：无需浏览器依赖的 DOM 冒烟测试。
-- `scripts/`：构建与本地静态服务。
-- `docs/`：架构、开发和部署说明。
-- `dist/`：构建产物，不提交 Git。
-- `wrangler.jsonc`：Workers Static Assets、自动配置的 KV binding 与部署变量。
-
-## 配置策略
-
-普通静态构建优先读取 `config/config.local.json`；若不存在，则使用 `config/config.example.json`。Cloudflare Worker 部署从控制台运行时变量生成 `/config.json`，本地 Wrangler 则读取被 Git 忽略的 `.dev.vars`，两者都不依赖 `dist/`。
+- `src/index.html`:唯一页面入口,两个视图模板 + 主题抽屉 + 登录/验证弹窗。
+- `src/detail.html`:旧链接跳转 stub(不进商店发布)。
+- `src/assets/js/app.js`:hash 路由器。
+- `src/assets/js/dashboard.js` / `detail.js`:两个视图模块,导出 `mount(route)`。
+- `src/assets/js/shared/`:跨视图模块(`route` / `theme` / `theme-settings` / `flags` / `auth` / `admin` / `http` / `url` / `title` / `login` / `ping` / `probe-history` / `billing` / `dom` / `i18n`)。
+- `src/assets/css/`:`main.css` 公共样式、`detail.css` 详情样式。
+- `config/`:`config.example.json` 示例;`config.local.json`(git 忽略)供独立部署构建时注入 meta。
+- `scripts/`:`build.mjs` 构建注入、`serve.mjs` 本地预览(含旗帜代理)、`release-theme.mjs` 商店发布。
+- `tests/`:`node --test` 冒烟与单元测试,无浏览器依赖。
+- `dist/`:构建产物,不提交 Git;`theme-dist` 分支只保存商店产物。
 
 ## 权限边界
 
-- 公开页面可读取服务器列表、详情及后端允许的历史范围。
-- 超过 1 小时的历史需要 JWT。后端只认 `Authorization: Bearer`，不读 Cookie。
-- JWT 保存在浏览器 `localStorage`，按域名隔离。主题与原管理端不在同一域名时，原后台登录状态不会自动穿透。
-- 首页、详情页与可选主题后台在本主题域名登录：调用原 `/admin/api` 获取 token，写入当前域名 `localStorage`（按 `apiBase` 隔离）。
-- 主题设置公开读取；写设置和上传背景必须携带 JWT。Worker 只用未知 action 验证令牌，不调用 `get_settings`，也不读取上游 Secret。
-- 自定义 CSS 通过 `textContent` 写入固定 `<style>`，同时拒绝外部资源 URL、`@import` 与样式标签注入。
-- 管理 API、JWT Secret 和 Turnstile Secret 不属于主题源码；主题后台只消费原接口，不增加 D1 读写策略。
-
+- 公开页面可读服务器列表、详情与后端允许的历史范围;超过 1 小时历史需 JWT(`Authorization: Bearer`,不读 Cookie)。
+- JWT 按 apiBase 域名隔离存 `localStorage`;同源部署时与上游后台共享 legacy `jwt_token`。
+- 主题设置纯客户端,不经任何主题侧服务端;站长层片段与上游 `custom_script` 同信任级别(本就由站长控制)。
+- 自定义 CSS 通过 `textContent` 写入固定 `<style>`,拒绝外部资源与标签注入。

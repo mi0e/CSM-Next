@@ -79,6 +79,9 @@ globalThis.sessionStorage = storage()
 globalThis.setInterval = () => 1
 globalThis.clearInterval = () => {}
 
+// config.json is deprecated; API bases come from the meta tag convention.
+nodeFor('meta[name="apiBase"]').getAttribute = name => (name === 'content' ? 'https://upstream.example' : null)
+
 globalThis.IntersectionObserver = class {
   constructor(callback) { this.callback = callback }
   observe(target) { this.callback([{ isIntersecting: true, target }]) }
@@ -111,8 +114,6 @@ const json = value => new Response(JSON.stringify(value), {
 })
 globalThis.fetch = async input => {
   const url = String(input)
-  if (url === './config.json') return json({ apiBase: ['https://upstream.example'], title: 'History Test', refreshInterval: 60000 })
-  if (url === './api/theme-settings') return json({ success: true, settings: { backgroundImage: '', panelOpacity: 1, customCss: '' } })
   if (url === 'https://upstream.example/api/config') return json({ turnstile_enabled: false, site_title: 'History Test' })
   if (url === 'https://upstream.example/api/servers') return json({
     servers: [{
@@ -136,7 +137,8 @@ globalThis.fetch = async input => {
 }
 
 const realSetTimeout = globalThis.setTimeout
-await import(`${new URL('../src/assets/js/dashboard.js', import.meta.url).href}?history=${Date.now()}`)
+const { mount } = await import(`${new URL('../src/assets/js/dashboard.js', import.meta.url).href}?history=${Date.now()}`)
+await mount({ name: 'dashboard' })
 await new Promise(resolve => realSetTimeout(resolve, 240))
 
 const cards = nodeFor('#cardGroups').innerHTML

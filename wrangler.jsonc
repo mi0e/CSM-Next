@@ -3,29 +3,10 @@
   "name": "csm-next",
   "keep_vars": true,
   "compatibility_date": "2026-07-15",
-  "main": "./worker/index.js",
-  "kv_namespaces": [
-    {
-      "binding": "THEME_SETTINGS"
-    }
-  ],
+  // 纯静态部署：构建产物直接由 Cloudflare 静态资产服务，没有 Worker 代码。
+  // Workers Builds 构建命令使用 `npm run build`，输出目录 dist/。
   "assets": {
-    "directory": "./src",
-    "binding": "ASSETS",
-    "html_handling": "none",
-    "run_worker_first": [
-      "/",
-      "/index.html",
-      "/config.json",
-      "/api/theme-settings",
-      "/api/theme-background",
-      "/detail",
-      "/detail.html",
-      "/admin",
-      "/admin/*",
-      "/admin.html",
-      "/pages",
-      "/pages/*"
-    ]
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash"
   }
 }
