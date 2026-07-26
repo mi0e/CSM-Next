@@ -125,3 +125,37 @@ export function summarizeProbeHistory(value, {
 
   return result
 }
+
+export const PING_SPARKLINE_MIN_SPAN_MS = 5 * 60 * 1000
+
+/**
+ * Build normalized polyline points for a session latency trend fed purely by
+ * live WebSocket samples (no history requests). Each row contributes the
+ * average of its valid line latencies. Returns null with fewer than 2 points.
+ */
+export function pingSparkline(rows, { now = Date.now(), width = 100, height = 28, pad = 2 } = {}) {
+  const series = normalizeProbeHistory(rows).flatMap(row => {
+    const values = PROBE_LINES.map(line => row[line.ping])
+      .filter(value => Number.isFinite(value) && value > 0)
+    return values.length ? [{ t: row.timestamp, v: average(values) }] : []
+  })
+  if (series.length < 2) return null
+  const span = Math.max(now - series[0].t, PING_SPARKLINE_MIN_SPAN_MS)
+  const start = now - span
+  const values = series.map(point => point.v)
+  const top = Math.max(...values) * 1.15 || 1
+  const innerHeight = height - pad * 2
+  const points = series.map(point => {
+    const x = Math.min(width, Math.max(0, ((point.t - start) / span) * width))
+    const y = pad + innerHeight - (point.v / top) * innerHeight
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+  return {
+    points,
+    min: Math.min(...values),
+    max: Math.max(...values),
+    latest: series[series.length - 1].v,
+    count: series.length,
+    spanMs: span
+  }
+}

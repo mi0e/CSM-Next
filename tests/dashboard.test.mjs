@@ -96,10 +96,15 @@ if (!cards.includes('lipis/flag-icons@7.3.2/flags/4x3/jp.svg')) {
 if (!cards.includes('gauge-progress') || cards.includes('conic-gradient')) {
   throw new Error('SVG gauge did not render')
 }
-if (!cards.includes('data-probe-source="history"') || (cards.match(/data-probe-bucket=/g) || []).length < 48) {
-  throw new Error('Real one-hour probe history bars did not render')
+if (!cards.includes('ping-item') || !cards.includes('>CT<')) {
+  throw new Error('Live probe value list did not render')
 }
-if (cards.includes('实时丢包')) throw new Error('Legacy latest-sample loss label is still rendered')
+if (!cards.includes('ping-sparkline') || !cards.includes('实时趋势')) {
+  throw new Error('Preview session sparkline did not render')
+}
+if (cards.includes('data-probe-bucket') || cards.includes('probe-bars')) {
+  throw new Error('Legacy probe timeline markup is still rendered')
+}
 if (String(total) !== '8' || String(online) !== '7') {
   throw new Error(`Unexpected preview stats: total=${total}, online=${online}`)
 }

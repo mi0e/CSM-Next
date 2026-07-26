@@ -1,5 +1,6 @@
 import { getJwt, setJwt } from './shared/auth.js'
 import { originalAdminUrl, resolveAdminUrl } from './shared/admin.js'
+import { formatBillingPrice } from './shared/billing.js'
 import { escapeHtml } from './shared/dom.js'
 import { fetchJson } from './shared/http.js'
 import {
@@ -12,19 +13,15 @@ import {
 import {
   normalizeThemeSettings, validateThemeSettings
 } from './shared/theme-settings.js'
-import {
-  mergeProbeHistory, normalizeProbeHistory, PROBE_HISTORY_BUCKETS, PROBE_LINES,
-  summarizeProbeHistory
-} from './shared/probe-history.js'
+import { mergeProbeHistory, pingSparkline, PROBE_LINES } from './shared/probe-history.js'
+import { isPingDisabled, isPingValid, pingLevel } from './shared/ping.js'
 import { resolveSiteTitle } from './shared/title.js'
-import { joinUrl, normalizeBase } from './shared/url.js'
+import { joinUrl, metaApiBases, normalizeBase } from './shared/url.js'
 
 const ONLINE_THRESHOLD = 5 * 60 * 1000
 const DEFAULT_REFRESH_INTERVAL = 60 * 1000
 const MB = 1024 * 1024
 const GB = 1024 * MB
-const PROBE_HISTORY_CONCURRENCY = 4
-const PROBE_HISTORY_CACHE_TTL = 2 * 60 * 1000
 
 const translations = {
   zh: {
@@ -52,7 +49,8 @@ const translations = {
     themeCustomize: '主题自定义', themeSubtitle: '个性化外观', close: '关闭',
     themeLoginRequired: '登录后即可修改并保存全站主题。',
     themeAuthorized: '已登录，保存后将应用到所有访客。', themePreviewAuth: '预览模式：修改仅在当前页面生效。',
-    themeBackground: '背景图片', themeBackgroundHint: '仅允许 HTTPS 图片地址；留空表示不使用背景图。',
+    themeGroupBackground: '背景图片', themeGroupEffects: '界面效果', themeGroupAdvanced: '高级',
+    themeBackground: '图片地址', themeBackgroundHint: '仅允许 HTTPS 图片地址；留空表示不使用背景图。',
     themeBackgroundUpload: '上传本地图片', themeUploadHint: '支持 JPG、PNG、WebP、GIF、AVIF，最大 2 MB；上传后自动设为背景。',
     themeTransparency: '界面透明化', themeTransparencyHint: '独立控制卡片和顶部栏的透明效果。',
     themeTransparencyMode: '透明方案',
@@ -104,9 +102,7 @@ const translations = {
     traffic: '流量',
     pingStats: '探针状态',
     latency: '延迟',
-    loss: '丢包',
-    lossHistoryHint: '基于最近 1 小时 CT/CU/CM/BD 四线路历史采样计算',
-    lastHour: '最近 1 小时',
+    liveTrend: '实时趋势',
     trafficLimit: '流量限额',
     uptime: '运行',
     expired: '已到期',
@@ -118,7 +114,7 @@ const translations = {
     justNow: '刚刚',
     ago: '{value}前',
     timeout: '超时',
-    currentSamples: '当前四线路',
+    currentSamples: '实时采样',
     demoHint: '当前为 ?preview=1 本地预览模式。'
   },
   en: {
@@ -146,7 +142,8 @@ const translations = {
     themeCustomize: 'Customize theme', themeSubtitle: 'Personalize appearance', close: 'Close',
     themeLoginRequired: 'Sign in to customize and save the site-wide theme.',
     themeAuthorized: 'Signed in. Saved changes will apply to every visitor.', themePreviewAuth: 'Preview mode: changes apply to this page only.',
-    themeBackground: 'Background image', themeBackgroundHint: 'HTTPS image URLs only. Leave empty for no background.',
+    themeGroupBackground: 'Background', themeGroupEffects: 'Interface effects', themeGroupAdvanced: 'Advanced',
+    themeBackground: 'Image URL', themeBackgroundHint: 'HTTPS image URLs only. Leave empty for no background.',
     themeBackgroundUpload: 'Upload local image', themeUploadHint: 'JPG, PNG, WebP, GIF, or AVIF up to 2 MB. The upload becomes the background.',
     themeTransparency: 'Interface transparency', themeTransparencyHint: 'Controls transparency for cards and the top bar independently.',
     themeTransparencyMode: 'Transparency style',
@@ -198,9 +195,7 @@ const translations = {
     traffic: 'Traffic',
     pingStats: 'Probe Stats',
     latency: 'Latency',
-    loss: 'Loss',
-    lossHistoryHint: 'Calculated from CT/CU/CM/BD samples reported during the last hour',
-    lastHour: 'Last hour',
+    liveTrend: 'Live trend',
     trafficLimit: 'Traffic Limit',
     uptime: 'up',
     expired: 'Expired',
@@ -212,7 +207,7 @@ const translations = {
     justNow: 'just now',
     ago: '{value} ago',
     timeout: 'timeout',
-    currentSamples: '4 live probes',
+    currentSamples: 'Live samples',
     demoHint: 'Local preview mode enabled by ?preview=1.'
   }
 }
@@ -253,12 +248,7 @@ const state = {
   themeSettingsLoaded: false,
   themeSettingsBusy: false,
   themeDrawerOpen: false,
-  probeHistories: new Map(),
-  probeHistoryLoads: new Set(),
-  probeHistoryQueue: [],
-  probeHistoryQueued: new Set(),
-  probeHistoryActive: 0,
-  probeObserver: null
+  probeHistories: new Map()
 }
 
 const elements = {
@@ -401,12 +391,6 @@ function percentage(used, total) {
   return clamp((used / total) * 100)
 }
 
-function average(values) {
-  const valid = values.map(Number).filter(value => Number.isFinite(value) && value >= 0)
-  if (!valid.length) return null
-  return valid.reduce((sum, value) => sum + value, 0) / valid.length
-}
-
 function flagMarkup(region, compact = false) {
   const code = String(region || '').trim().toUpperCase()
   if (!/^[A-Z]{2}$/.test(code) || code === 'XX') return '<span class="flag-code">--</span>'
@@ -492,6 +476,34 @@ function applyTheme() {
   elements.themeColor?.setAttribute('content', state.theme === 'dark' ? '#101216' : '#f8f9fb')
 }
 
+/**
+ * Theme drawer groups are data-driven: each entry binds a
+ * [data-theme-group] section in index.html to a title and a Lucide icon.
+ * Adding a customization group = one entry here + the section markup.
+ */
+const themeSettingGroups = [
+  { id: 'background', titleKey: 'themeGroupBackground', icon: 'image' },
+  { id: 'effects', titleKey: 'themeGroupEffects', icon: 'layers' },
+  { id: 'advanced', titleKey: 'themeGroupAdvanced', icon: 'code-xml' }
+]
+
+const themeGroupIcons = {
+  image: '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  layers: '<path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/>',
+  'code-xml': '<path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/>'
+}
+
+function renderThemeSettingGroups() {
+  for (const group of themeSettingGroups) {
+    const section = document.querySelector(`[data-theme-group="${group.id}"]`)
+    if (!section || section.querySelector('.theme-settings-group-title')) continue
+    const title = document.createElement('h3')
+    title.className = 'theme-settings-group-title'
+    title.innerHTML = `<svg class="lucide-icon" data-lucide="${group.icon}" viewBox="0 0 24 24" aria-hidden="true">${themeGroupIcons[group.icon] || ''}</svg><span data-i18n="${group.titleKey}"></span>`
+    section.prepend(title)
+  }
+}
+
 function applyTranslations() {
   document.documentElement.lang = state.language === 'zh' ? 'zh-CN' : 'en'
   document.querySelectorAll('[data-i18n]').forEach(node => {
@@ -543,13 +555,21 @@ function updateConnectionState(mode) {
 }
 
 async function loadRuntimeConfig() {
+  let config = {}
   try {
     const response = await fetch('./config.json', { cache: 'no-store' })
     if (!response.ok) throw new Error(`config.json: HTTP ${response.status}`)
-    return await response.json()
+    config = await response.json() || {}
   } catch (error) {
-    console.warn('[theme] config.json could not be loaded, using same-origin defaults.', error)
-    return { apiBase: [], title: 'CF-Server-Monitor', backgroundImage: '', customAdminEnabled: false }
+    console.warn('[theme] config.json could not be loaded, trying <meta name="apiBase"> and same-origin defaults.', error)
+  }
+  const configured = (Array.isArray(config.apiBase) ? config.apiBase : config.apiBase ? [config.apiBase] : []).filter(Boolean)
+  return {
+    title: 'CF-Server-Monitor',
+    backgroundImage: '',
+    customAdminEnabled: false,
+    ...config,
+    apiBase: configured.length ? configured : metaApiBases()
   }
 }
 
@@ -989,17 +1009,18 @@ async function logoutCurrentSite() {
 function previewServers() {
   const now = Date.now()
   const definitions = [
-    ['Tokyo-Edge', 'JP', 'Asia', 'Debian 12', 3.2, 28, 11, 16, 0, '¥120/Annual', 219],
-    ['yt-Hong Kong', 'HK', 'Asia', 'Debian 12', 4.0, 20, 47, 128, 21.2, '¥190/Annual', 219],
-    ['Singapore-Core', 'SG', 'Asia', 'Ubuntu 24.04', 2.1, 11, 57, 58, 1.8, '$24/Year', 312],
-    ['Seoul-Gateway', 'KR', 'Asia', 'Alpine 3.20', 0.8, 20, 45, 83, 0.3, '$2/Month', 87],
-    ['Frankfurt-01', 'DE', 'Europe', 'Debian 12', 8.6, 34, 39, 169, 0, '€22/Year', 148],
-    ['Amsterdam-Edge', 'NL', 'Europe', 'Ubuntu 22.04', 14.2, 46, 62, 181, 2.4, '€3/Month', 61],
-    ['London-Backup', 'GB', 'Europe', 'AlmaLinux 9', 0, 18, 29, 0, 100, '£16/Year', 28],
-    ['Los-Angeles', 'US', 'America', 'Rocky Linux 9', 26, 52, 73, 142, 4.2, '$30/Year', 174]
+    ['Tokyo-Edge', 'JP', 'Asia', 'Debian 12', 3.2, 28, 11, 16, 0, ['120.00', '¥', 'year'], 219],
+    ['yt-Hong Kong', 'HK', 'Asia', 'Debian 12', 4.0, 20, 47, 128, 21.2, ['190.00', '¥', 'year'], 219],
+    ['Singapore-Core', 'SG', 'Asia', 'Ubuntu 24.04', 2.1, 11, 57, 58, 1.8, ['24.00', '$', 'year'], 312],
+    ['Seoul-Gateway', 'KR', 'Asia', 'Alpine 3.20', 0.8, 20, 45, 83, 0.3, ['2.00', '$', 'month'], 87],
+    ['Frankfurt-01', 'DE', 'Europe', 'Debian 12', 8.6, 34, 39, 169, 0, ['22.00', '€', 'year'], 148],
+    ['Amsterdam-Edge', 'NL', 'Europe', 'Ubuntu 22.04', 14.2, 46, 62, 181, 2.4, ['3.00', '€', 'month'], 61],
+    ['London-Backup', 'GB', 'Europe', 'AlmaLinux 9', 0, 18, 29, 0, 100, ['0', '', 'month'], 28],
+    ['Los-Angeles', 'US', 'America', 'Rocky Linux 9', 26, 52, 73, 142, 4.2, ['30.00', '$', 'year'], 174]
   ]
   return definitions.map((item, index) => {
-    const [name, region, group, os, cpu, ram, disk, ping, loss, price, expireDays] = item
+    const [name, region, group, os, cpu, ram, disk, ping, loss, billing, expireDays] = item
+    const [price, currency, billingCycle] = billing
     const offline = name === 'London-Backup'
     const ramTotal = 1024 + (index % 4) * 1024
     const diskTotal = 20480 + (index % 3) * 20480
@@ -1032,6 +1053,9 @@ function previewServers() {
       ip_v4: '1',
       ip_v6: index % 3 === 0 ? '1' : '0',
       price,
+      currency,
+      billing_cycle: billingCycle,
+      auto_renewal: index % 2 ? '1' : '0',
       expire_date: new Date(now + expireDays * 86400000).toISOString().slice(0, 10),
       boot_time: now - (7 + index * 33) * 86400000 - index * 3600000,
       last_updated: now - (offline ? 12 * 60 : 20 + index * 6) * 1000,
@@ -1067,14 +1091,11 @@ function previewProbeHistory(server, seed = 0) {
   }).filter(Boolean)
 }
 
-function storeProbeSamples(key, incoming, patch = {}) {
+// Session-only trend pool fed by live WebSocket samples, poll refreshes and
+// the upstream connect replay — deliberately no /api/history/all requests.
+function storeProbeSamples(key, incoming) {
   if (!key) return
-  const current = state.probeHistories.get(key) || { rows: [], loaded: false, retryAt: 0 }
-  state.probeHistories.set(key, {
-    ...current,
-    ...patch,
-    rows: mergeProbeHistory(current.rows, incoming)
-  })
+  state.probeHistories.set(key, mergeProbeHistory(state.probeHistories.get(key) || [], incoming))
 }
 
 function currentProbeSample(server) {
@@ -1096,111 +1117,6 @@ function pruneProbeHistories() {
   for (const key of state.probeHistories.keys()) {
     if (!activeKeys.has(key)) state.probeHistories.delete(key)
   }
-  state.probeHistoryQueue = state.probeHistoryQueue.filter(server => activeKeys.has(server._sourceKey))
-  state.probeHistoryQueued = new Set(state.probeHistoryQueue.map(server => server._sourceKey))
-}
-
-function probeHistoryCacheKey(site, server) {
-  return `csm-next-probe-history:${encodeURIComponent(site.base || location.origin)}:${server.id}`
-}
-
-function readCachedProbeHistory(site, server) {
-  try {
-    if (typeof sessionStorage === 'undefined') return null
-    const key = probeHistoryCacheKey(site, server)
-    const cached = JSON.parse(sessionStorage.getItem(key) || 'null')
-    if (!cached || Date.now() - Number(cached.savedAt) > PROBE_HISTORY_CACHE_TTL) {
-      sessionStorage.removeItem(key)
-      return null
-    }
-    return normalizeProbeHistory(cached.rows)
-  } catch {
-    return null
-  }
-}
-
-function cacheProbeHistory(site, server, rows) {
-  try {
-    if (typeof sessionStorage === 'undefined') return
-    sessionStorage.setItem(probeHistoryCacheKey(site, server), JSON.stringify({
-      savedAt: Date.now(),
-      rows: normalizeProbeHistory(rows)
-    }))
-  } catch { /* storage may be disabled or full */ }
-}
-
-async function loadProbeHistory(server) {
-  const key = server?._sourceKey
-  const site = state.sites[server?._siteIndex]
-  if (!key || !site || state.probeHistoryLoads.has(key)) return
-  state.probeHistoryLoads.add(key)
-  try {
-    const cached = readCachedProbeHistory(site, server)
-    if (cached) {
-      storeProbeSamples(key, cached, { loaded: true, retryAt: 0 })
-      scheduleRender()
-      return
-    }
-    const data = await requestJson(site, `/api/history/all?id=${encodeURIComponent(server.id)}&hours=1`)
-    if (!findServer(key)) return
-    const rows = normalizeProbeHistory(data)
-    storeProbeSamples(key, rows, { loaded: true, retryAt: 0 })
-    cacheProbeHistory(site, server, rows)
-    scheduleRender()
-  } catch (error) {
-    const current = state.probeHistories.get(key) || { rows: [], loaded: false }
-    state.probeHistories.set(key, { ...current, loaded: false, retryAt: Date.now() + 60_000 })
-    console.warn(`[probe-history] unable to load ${key}`, error)
-  } finally {
-    state.probeHistoryLoads.delete(key)
-  }
-}
-
-function pumpProbeHistoryQueue() {
-  while (state.probeHistoryActive < PROBE_HISTORY_CONCURRENCY && state.probeHistoryQueue.length) {
-    const server = state.probeHistoryQueue.shift()
-    const key = server?._sourceKey
-    state.probeHistoryQueued.delete(key)
-    if (!key || !findServer(key)) continue
-    state.probeHistoryActive += 1
-    loadProbeHistory(server).finally(() => {
-      state.probeHistoryActive = Math.max(0, state.probeHistoryActive - 1)
-      pumpProbeHistoryQueue()
-    })
-  }
-}
-
-function queueProbeHistory(server) {
-  const key = server?._sourceKey
-  const entry = state.probeHistories.get(key)
-  if (!key || state.preview || entry?.loaded || (entry?.retryAt || 0) > Date.now()) return
-  if (state.probeHistoryLoads.has(key) || state.probeHistoryQueued.has(key)) return
-  state.probeHistoryQueued.add(key)
-  state.probeHistoryQueue.push(server)
-  pumpProbeHistoryQueue()
-}
-
-function observeVisibleProbeCards() {
-  state.probeObserver?.disconnect?.()
-  state.probeObserver = null
-  if (state.preview) return
-  const cards = [...document.querySelectorAll('.server-card[data-server-key]')]
-  if (!cards.length) return
-  if (typeof IntersectionObserver !== 'function') {
-    cards.forEach(card => queueProbeHistory(findServer(card.dataset.serverKey)))
-    return
-  }
-  state.probeObserver = new IntersectionObserver(entries => {
-    entries.forEach(entry => {
-      if (!entry.isIntersecting) return
-      queueProbeHistory(findServer(entry.target.dataset.serverKey))
-      state.probeObserver?.unobserve?.(entry.target)
-    })
-  }, { rootMargin: '240px 0px' })
-  cards.forEach(card => {
-    const history = state.probeHistories.get(card.dataset.serverKey)
-    if (!history?.loaded) state.probeObserver.observe(card)
-  })
 }
 
 async function fetchSiteServers(site) {
@@ -1231,7 +1147,7 @@ async function refreshData({ notify = false } = {}) {
       state.servers = previewServers()
       state.probeHistories.clear()
       state.servers.forEach((server, index) => {
-        storeProbeSamples(server._sourceKey, previewProbeHistory(server, index), { loaded: true, retryAt: 0 })
+        storeProbeSamples(server._sourceKey, previewProbeHistory(server, index))
       })
       state.siteConfigs = [{ show_price: true, show_expire: true, show_tf: true }]
       elements.versionText.textContent = 'CF-Server-Monitor Theme · Preview'
@@ -1352,49 +1268,26 @@ function filteredServers() {
   })
 }
 
-function probeClass(value, type) {
-  if (value === null || value === undefined || value === '') return 'missing'
-  const number = Number(value)
-  if (!Number.isFinite(number) || number < 0) return 'missing'
-  if (type === 'latency') return number >= 180 ? 'bad' : number >= 90 ? 'warn' : ''
-  return number >= 10 ? 'bad' : number >= 2 ? 'warn' : ''
-}
-
-function formatProbeTime(value) {
-  return new Date(value).toLocaleTimeString(state.language === 'zh' ? 'zh-CN' : 'en-GB', {
-    hour: '2-digit', minute: '2-digit', hour12: false
-  })
-}
-
-function formatProbeValue(value, type) {
-  if (value === null || value === undefined || value === '') return 'N/A'
-  if (!Number.isFinite(Number(value))) return 'N/A'
-  return type === 'latency' ? `${Number(value).toFixed(0)} ms` : `${Number(value).toFixed(1)}%`
-}
-
-function renderProbeTimeline(buckets, type) {
-  return buckets.map((bucket, index) => {
-    const routeValues = PROBE_LINES.flatMap(line => {
-      const value = bucket.probes?.[line.id]
-      return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
-        ? [`${line.id} ${formatProbeValue(value, type)}`]
-        : []
-    })
-    const label = [
-      `${formatProbeTime(bucket.start)}–${formatProbeTime(bucket.end)}`,
-      formatProbeValue(bucket.value, type),
-      ...routeValues
-    ].join(' · ')
-    return `<span class="probe-bar ${probeClass(bucket.value, type)}" data-probe-bucket="${index}" title="${escapeHtml(label)}"></span>`
+// Upstream-style probe block: one live value per enabled line (disabled lines
+// are hidden, none enabled hides the block) plus a request-free session trend.
+function probeSectionMarkup(server) {
+  const lines = PROBE_LINES
+    .map(line => ({ id: line.id, value: server[line.ping] }))
+    .filter(line => !isPingDisabled(line.value))
+  if (!lines.length) return ''
+  const items = lines.map(line => {
+    const text = isPingValid(line.value) ? `${Number.parseInt(line.value, 10)} ms` : t('timeout')
+    const level = pingLevel(line.value)
+    return `<span class="ping-item"><span class="ping-line">${line.id}</span><b class="ping-value${level ? ` ${level}` : ''}">${escapeHtml(text)}</b></span>`
   }).join('')
-}
-
-function renderCurrentProbeBars(values, type) {
-  return PROBE_LINES.map((line, index) => {
-    const value = values[index]
-    const label = `${line.id} ${formatProbeValue(value, type)}`
-    return `<span class="probe-bar ${probeClass(value, type)}" title="${escapeHtml(label)}"></span>`
-  }).join('')
+  const spark = pingSparkline(state.probeHistories.get(server._sourceKey) || [])
+  const trend = spark
+    ? `<div class="ping-sparkline" title="${escapeHtml(`${t('latency')} ${Math.round(spark.min)}–${Math.round(spark.max)} ms`)}"><svg viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="${spark.points}"/></svg></div>`
+    : ''
+  return `<section class="probe-section">
+          <div class="probe-heading"><span>${t('pingStats')}</span><small>${t(spark ? 'liveTrend' : 'currentSamples')}</small></div>
+          <div class="ping-list">${items}</div>${trend}
+        </section>`
 }
 
 function gaugeMarkup(label, value, detail) {
@@ -1407,24 +1300,6 @@ function cardMarkup(server) {
   const cpu = clamp(server.cpu)
   const ram = percentage(Number.parseFloat(server.ram_used) || 0, Number.parseFloat(server.ram_total) || 0)
   const disk = percentage(Number.parseFloat(server.disk_used) || 0, Number.parseFloat(server.disk_total) || 0)
-  const pingValues = [server.ping_ct, server.ping_cu, server.ping_cm, server.ping_bd]
-    .map(value => value === null || value === undefined || value === '' ? null : Number(value))
-  const lossValues = [server.loss_ct, server.loss_cu, server.loss_cm, server.loss_bd]
-    .map(value => value === null || value === undefined || value === '' ? null : Number(value))
-  const history = state.probeHistories.get(server._sourceKey)
-  const historyReady = Boolean(history?.loaded)
-  const probeSummary = historyReady
-    ? summarizeProbeHistory(history.rows, { bucketCount: PROBE_HISTORY_BUCKETS })
-    : null
-  const pingAverage = historyReady ? probeSummary.latency.average : average(pingValues)
-  const lossAverage = historyReady ? probeSummary.loss.average : average(lossValues)
-  const pingBars = historyReady
-    ? renderProbeTimeline(probeSummary.latency.buckets, 'latency')
-    : renderCurrentProbeBars(pingValues, 'latency')
-  const lossBars = historyReady
-    ? renderProbeTimeline(probeSummary.loss.buckets, 'loss')
-    : renderCurrentProbeBars(lossValues, 'loss')
-  const probeSource = historyReady ? 'history' : 'current'
   const limit = parseTrafficLimit(server.traffic_limit)
   const used = trafficUsed(server)
   const quotaPercent = percentage(used, limit)
@@ -1438,7 +1313,8 @@ function cardMarkup(server) {
     if (server.ip_v4 === '1') badges.push('<span class="mini-badge">V4</span>')
     if (server.ip_v6 === '1') badges.push('<span class="mini-badge">V6</span>')
   }
-  if (showPrice && server.price) badges.push(`<span class="mini-badge price">${escapeHtml(server.price)}</span>`)
+  const priceText = showPrice ? formatBillingPrice(server, state.language) : ''
+  if (priceText) badges.push(`<span class="mini-badge price">${escapeHtml(priceText)}</span>`)
   const expiry = showExpire ? expiryLabel(server.expire_date) : ''
   if (expiry) badges.push(`<span class="mini-badge expire">${escapeHtml(expiry)}</span>`)
   const quota = showTraffic && limit > 0
@@ -1462,13 +1338,7 @@ function cardMarkup(server) {
       <div class="metrics-panel">
         <div class="metric-row"><span class="metric-name network">${t('netSpeed')}</span><span class="metric-values"><span class="up">↑ ${formatBytes(server.net_out_speed)}/s</span><span class="down">↓ ${formatBytes(server.net_in_speed)}/s</span></span></div>
         <div class="metric-row"><span class="metric-name">${t('traffic')}</span><span class="metric-values"><span>↑ ${formatBytes(server.net_tx_monthly)}</span><span>↓ ${formatBytes(server.net_rx_monthly)}</span></span></div>
-        <section class="probe-section" data-probe-source="${probeSource}">
-          <div class="probe-heading"><span>${t('pingStats')}</span><small>${t(historyReady ? 'lastHour' : 'currentSamples')}</small></div>
-          <div class="probe-grid">
-            <div class="probe-box"><div class="probe-box-head"><span>${t('latency')}</span><strong>${pingAverage === null ? t('timeout') : `${pingAverage.toFixed(0)} ms`}</strong></div><div class="probe-bars">${pingBars}</div></div>
-            <div class="probe-box"><div class="probe-box-head"><span title="${escapeHtml(t('lossHistoryHint'))}">${t('loss')}</span><strong>${lossAverage === null ? '—' : `${lossAverage.toFixed(1)}%`}</strong></div><div class="probe-bars">${lossBars}</div></div>
-          </div>
-        </section>
+        ${probeSectionMarkup(server)}
         ${quota}
       </div>
     </div>
@@ -1485,7 +1355,6 @@ function emptyMarkup(hasAnyServers) {
 function renderCards() {
   const servers = filteredServers()
   if (!servers.length) {
-    state.probeObserver?.disconnect?.()
     elements.cardGroups.innerHTML = emptyMarkup(state.servers.length > 0)
     return
   }
@@ -1502,7 +1371,6 @@ function renderCards() {
       ${showGroupTitles ? `<h2 class="group-title">${escapeHtml(name)}<small>${groupServers.length}</small></h2>` : ''}
       <div class="server-grid">${groupServers.map(cardMarkup).join('')}</div>
     </section>`).join('')
-  observeVisibleProbeCards()
 }
 
 function meterMarkup(value) {
@@ -1802,6 +1670,7 @@ function bindEvents() {
 }
 
 async function init() {
+  renderThemeSettingGroups()
   bindEvents()
   applyTheme()
   applyTranslations()

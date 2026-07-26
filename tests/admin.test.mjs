@@ -60,6 +60,10 @@ test('home toolbar opens theme customization and keeps authorization rightmost',
   assert.match(home, /id="themeCustomCss"/)
   assert.doesNotMatch(home, /id="themeOriginalAdminLink"/)
   assert.doesNotMatch(home, /class="theme-drawer-footer"/)
+  for (const group of ['background', 'effects', 'advanced']) {
+    assert.match(home, new RegExp(`data-theme-group="${group}"`))
+  }
+  assert.doesNotMatch(home, /class="theme-settings-group-title"/)
 })
 
 test('top action bars use locally inlined Lucide icons', async () => {
