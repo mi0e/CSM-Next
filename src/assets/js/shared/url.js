@@ -32,14 +32,18 @@ export function sanitizeBackgroundImage(value) {
   }
 }
 
+/** Read a `<meta name="...">` content value, '' when absent. */
+export function metaContent(name, doc = typeof document !== 'undefined' ? document : null) {
+  return doc?.querySelector?.(`meta[name="${name}"]`)?.getAttribute?.('content') || ''
+}
+
 /**
  * Read API bases from the upstream static-theme convention
  * `<meta name="apiBase" content="https://a,https://b">` (comma separated).
  * Returns [] when the tag is absent so callers can fall back to same-origin.
  */
 export function metaApiBases(doc = typeof document !== 'undefined' ? document : null) {
-  const content = doc?.querySelector?.('meta[name="apiBase"]')?.getAttribute?.('content') || ''
-  return content.split(',').map(item => item.trim()).filter(Boolean)
+  return metaContent('apiBase', doc).split(',').map(item => item.trim()).filter(Boolean)
 }
 
 /** Apply a sanitized background image to document.body, or clear it when invalid. */

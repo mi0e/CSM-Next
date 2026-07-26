@@ -1,6 +1,7 @@
 import { getJwt, setJwt, isLoggedIn } from './shared/auth.js'
 import { originalAdminUrl, resolveAdminUrl } from './shared/admin.js'
 import { escapeHtml } from './shared/dom.js'
+import { flagMarkup } from './shared/flags.js'
 import { fetchJson } from './shared/http.js'
 import {
   getLoginTurnstileToken, loginTurnstileRequired, loginWithCredentials,
@@ -8,7 +9,7 @@ import {
 } from './shared/login.js'
 import { applyThemeAppearance, loadThemeSettings } from './shared/theme.js'
 import { normalizeThemeSettings } from './shared/theme-settings.js'
-import { resolveSiteTitle } from './shared/title.js'
+import { injectedSiteTitle, resolveSiteTitle } from './shared/title.js'
 import { joinUrl, metaApiBases, normalizeBase } from './shared/url.js'
 
 const ONLINE_THRESHOLD = 5 * 60 * 1000
@@ -55,18 +56,23 @@ const colors = {
   red: '#ff8d8d', redFill: '#ffb7b7', green: '#2f7d3a', cyan: '#6bc7c5', blue: '#7d82d6', orange: '#ff9f43', magenta: '#ff2b91'
 }
 
-const params = new URLSearchParams(location.search)
-const state = {
-  config: {}, sites: [], site: null, server: null, history: [], hours: 1, apiConfig: {},
-  themeSettings: normalizeThemeSettings(), themeSettingsLoaded: false,
-  id: params.get('id') || '', siteIndex: Number(params.get('site') || 0), preview: params.get('preview') === '1',
-  language: localStorage.getItem('csm-next-language') || (navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'),
-  theme: localStorage.getItem('csm-next-theme') || 'light', tab: 'load', socket: null, socketManual: false,
-  socketRetry: null, renderTimer: null, refreshTimer: null, clockTimer: null,
-  pendingHistoryHours: null, loginBusy: false, turnstileWidgetId: null
+let state
+let elements
+
+function createState(route = {}) {
+  return {
+    config: {}, sites: [], site: null, server: null, history: [], hours: 1, apiConfig: {},
+    themeSettings: normalizeThemeSettings(), themeSettingsLoaded: false,
+    id: route.id || '', siteIndex: Number(route.siteIndex) || 0,
+    preview: new URLSearchParams(location.search).get('preview') === '1',
+    language: localStorage.getItem('csm-next-language') || (navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'),
+    theme: localStorage.getItem('csm-next-theme') || 'light', tab: 'load', socket: null, socketManual: false,
+    socketRetry: null, renderTimer: null, refreshTimer: null, clockTimer: null,
+    pendingHistoryHours: null, loginBusy: false, turnstileWidgetId: null
+  }
 }
 
-const elements = {
+const queryElements = () => ({
   brandTitle: document.querySelector('#brandTitle'), adminLink: document.querySelector('#adminLink'),
   refreshButton: document.querySelector('#refreshButton'), themeButton: document.querySelector('#themeButton'), languageButton: document.querySelector('#languageButton'),
   retryButton: document.querySelector('#retryButton'), loading: document.querySelector('#detailLoading'), error: document.querySelector('#detailError'),
@@ -84,7 +90,7 @@ const elements = {
   loginError: document.querySelector('#loginError'), loginMessage: document.querySelector('#loginMessage'),
   loginSubmit: document.querySelector('#loginSubmit'), loginCancel: document.querySelector('#loginCancel'),
   loginTurnstile: document.querySelector('#loginTurnstile'), loginAdminLink: document.querySelector('#loginAdminLink')
-}
+})
 
 function t(key, values = {}) {
   let text = translations[state.language]?.[key] ?? translations.en[key] ?? key
@@ -166,11 +172,8 @@ function isOnline(server) {
   return Boolean(updated && Date.now() - updated < ONLINE_THRESHOLD)
 }
 
-function flagMarkup(region, compact = false) {
-  const code = String(region || '').trim().toUpperCase()
-  if (!/^[A-Z]{2}$/.test(code) || code === 'XX') return '<span class="flag-code">--</span>'
-  const lower = code.toLowerCase()
-  return `<img class="region-flag" src="https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.3.2/flags/4x3/${lower}.svg" alt="" referrerpolicy="no-referrer"><span class="flag-code" hidden>${escapeHtml(code)}</span>`
+function regionFlag(region) {
+  return flagMarkup(region, state.site?.base || '')
 }
 
 function storageKey(base) {
@@ -181,20 +184,12 @@ function currentBase() {
   return state.site?.base || location.origin
 }
 
-async function loadConfig() {
-  let config = {}
-  try {
-    const response = await fetch('./config.json', { cache: 'no-store' })
-    if (!response.ok) throw new Error(`config.json: ${response.status}`)
-    config = await response.json() || {}
-  } catch { /* fall through to meta/same-origin defaults */ }
-  const configured = (Array.isArray(config.apiBase) ? config.apiBase : config.apiBase ? [config.apiBase] : []).filter(Boolean)
+// Upstream convention: config.json is deprecated — meta apiBase or same-origin.
+function loadConfig() {
   return {
-    title: 'CF-Server-Monitor',
+    title: injectedSiteTitle(),
     backgroundImage: '',
-    customAdminEnabled: false,
-    ...config,
-    apiBase: configured.length ? configured : metaApiBases()
+    apiBase: metaApiBases()
   }
 }
 
@@ -322,7 +317,6 @@ function applyConfig() {
   elements.adminLink.target = external ? '_blank' : ''
   elements.adminLink.rel = external ? 'noopener noreferrer' : ''
   if (elements.loginAdminLink) elements.loginAdminLink.href = originalAdminUrl(currentBase(), location.href)
-  if (state.preview) document.querySelectorAll('a[href="./"]').forEach(link => { link.href = './?preview=1' })
   const appearance = state.themeSettingsLoaded
     ? state.themeSettings
     : normalizeThemeSettings({}, { backgroundImage: state.config.backgroundImage, panelOpacity: 1 })
@@ -373,7 +367,7 @@ function specCard(label, value, note = '', classes = '') {
 
 function renderIdentity() {
   const server = state.server; const online = isOnline(server)
-  elements.nodeFlag.innerHTML = flagMarkup(server.region)
+  elements.nodeFlag.innerHTML = regionFlag(server.region)
   elements.nodeName.textContent = server.name || server.id
   elements.nodeId.textContent = server.id
   elements.nodeStatus.textContent = online ? t('online') : t('offline')
@@ -695,8 +689,22 @@ function closeSocket() {
   try { state.socket?.close() } catch { /* noop */ }
 }
 
+let globalListeners = []
+
+function addGlobalListener(target, type, handler, options) {
+  target.addEventListener(type, handler, options)
+  globalListeners.push({ target, type, handler, options })
+}
+
+function removeGlobalListeners() {
+  for (const { target, type, handler, options } of globalListeners) {
+    target.removeEventListener(type, handler, options)
+  }
+  globalListeners = []
+}
+
 function bindEvents() {
-  document.addEventListener('error', event => {
+  addGlobalListener(document, 'error', event => {
     const image = event.target
     if (!image?.classList?.contains('region-flag')) return
     image.hidden = true; if (image.nextElementSibling) image.nextElementSibling.hidden = false
@@ -726,13 +734,13 @@ function bindEvents() {
   elements.loginModal?.addEventListener('click', event => {
     if (event.target === elements.loginModal) closeLoginModal({ clearPending: true })
   })
-  document.addEventListener('keydown', event => {
+  addGlobalListener(document, 'keydown', event => {
     if (event.key === 'Escape' && elements.loginModal && !elements.loginModal.hidden) {
       closeLoginModal({ clearPending: true })
     }
   })
-  window.addEventListener('resize', () => { clearTimeout(state.renderTimer); state.renderTimer = setTimeout(renderCharts, 120) })
-  window.addEventListener('beforeunload', closeSocket)
+  addGlobalListener(window, 'resize', () => { clearTimeout(state.renderTimer); state.renderTimer = setTimeout(renderCharts, 120) })
+  addGlobalListener(window, 'beforeunload', closeSocket)
 }
 
 async function init() {
@@ -740,9 +748,7 @@ async function init() {
   if (!state.id) { showError(new Error(t('invalidId'))); return }
   try {
     state.config = await loadConfig()
-    state.themeSettings = state.preview
-      ? { ...normalizeThemeSettings({}, { backgroundImage: state.config.backgroundImage, panelOpacity: 1 }), storage: 'preview' }
-      : await loadThemeSettings({ backgroundImage: state.config.backgroundImage, panelOpacity: 1 })
+    state.themeSettings = loadThemeSettings({ backgroundImage: state.config.backgroundImage, panelOpacity: 1 })
     state.themeSettingsLoaded = true
     const configured = Array.isArray(state.config.apiBase) ? state.config.apiBase : state.config.apiBase ? [state.config.apiBase] : []
     state.sites = (configured.length ? configured : ['']).map((base, index) => ({ index, base: normalizeBase(base) }))
@@ -758,4 +764,19 @@ async function init() {
   } catch (error) { showError(error) }
 }
 
-init()
+function destroy() {
+  closeSocket()
+  clearTimeout(state.renderTimer)
+  clearInterval(state.refreshTimer)
+  clearInterval(state.clockTimer)
+  clearTimeout(showToast.timer)
+  destroyLoginTurnstile()
+  removeGlobalListeners()
+}
+
+export async function mount(route) {
+  state = createState(route)
+  elements = queryElements()
+  await init()
+  return { destroy }
+}

@@ -3,80 +3,81 @@ import {
   normalizeThemeSettings, validateThemeSettings
 } from './theme-settings.js'
 
-export async function loadThemeSettings(fallback = {}, endpoint = './api/theme-settings') {
+/**
+ * Theme settings live in two layers:
+ *
+ * 1. Site layer — the site owner exports a snippet from the drawer and pastes
+ *    it into the upstream admin "custom script" box. The upstream Worker
+ *    injects it into every page as `window.__CSM_THEME__`, so all visitors
+ *    receive the owner's defaults. Standalone static deploys can ship the
+ *    same snippet in a <script> tag.
+ * 2. Visitor layer — the drawer saves personal overrides to localStorage,
+ *    which take precedence over the site layer on this browser only.
+ */
+
+export const THEME_SETTINGS_STORAGE_KEY = 'csm-next-theme-settings'
+export const SITE_THEME_GLOBAL = '__CSM_THEME__'
+
+export function siteThemeDefaults(scope = typeof window !== 'undefined' ? window : null) {
+  const injected = scope?.[SITE_THEME_GLOBAL]
+  if (!injected || typeof injected !== 'object' || Array.isArray(injected)) return {}
+  return injected
+}
+
+function readLocalThemeSettings(storage) {
   try {
-    const response = await fetch(endpoint, { cache: 'no-store' })
-    const data = await response.json().catch(() => null)
-    if (!response.ok || !data?.settings) throw new Error(data?.error || `HTTP ${response.status}`)
-    return {
-      ...normalizeThemeSettings(data.settings, fallback),
-      updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
-      storage: data.storage || 'kv'
-    }
+    const raw = storage.getItem(THEME_SETTINGS_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
   } catch {
-    return { ...normalizeThemeSettings({}, fallback), updatedAt: '', storage: 'fallback' }
+    return null
   }
 }
 
-export async function saveThemeSettings(settings, { token, siteIndex = 0, endpoint = './api/theme-settings' } = {}) {
+/**
+ * Resolve effective settings: visitor localStorage > site defaults > fallback.
+ * Kept awaitable-compatible: callers may `await` the returned value.
+ */
+export function loadThemeSettings(fallback = {}, {
+  storage = typeof localStorage !== 'undefined' ? localStorage : null,
+  scope = typeof window !== 'undefined' ? window : null
+} = {}) {
+  const siteDefaults = normalizeThemeSettings(siteThemeDefaults(scope), fallback)
+  const local = storage ? readLocalThemeSettings(storage) : null
+  if (!local) {
+    return { ...siteDefaults, storage: 'site' }
+  }
+  return { ...normalizeThemeSettings(local, siteDefaults), storage: 'local' }
+}
+
+/** Persist visitor overrides to this browser. Throws on invalid input. */
+export function saveThemeSettings(settings, {
+  storage = typeof localStorage !== 'undefined' ? localStorage : null
+} = {}) {
   const value = validateThemeSettings(settings)
-  const url = new URL(endpoint, location.href)
-  url.searchParams.set('site', String(siteIndex))
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token || ''}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(value),
-    cache: 'no-store'
-  })
-  const data = await response.json().catch(() => null)
-  if (!response.ok || !data?.settings) {
-    const error = new Error(data?.error || `HTTP ${response.status}`)
-    error.status = response.status
-    error.code = data?.code || ''
-    throw error
-  }
-  return {
-    ...normalizeThemeSettings(data.settings),
-    updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
-    storage: data.storage || 'kv'
-  }
+  storage?.setItem(THEME_SETTINGS_STORAGE_KEY, JSON.stringify(value))
+  return { ...value, storage: 'local' }
 }
 
-export async function uploadThemeBackground(file, { token, siteIndex = 0, endpoint = './api/theme-background' } = {}) {
-  const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'])
-  if (!file || !allowed.has(file.type)) {
-    const error = new Error('Unsupported image type')
-    error.code = 'invalid_background_file'
-    throw error
-  }
-  if (!file.size || file.size > 2 * 1024 * 1024) {
-    const error = new Error('Background image is too large')
-    error.code = 'background_file_too_large'
-    throw error
-  }
+/** Drop visitor overrides so the site defaults apply again. */
+export function clearThemeSettings({
+  storage = typeof localStorage !== 'undefined' ? localStorage : null
+} = {}) {
+  storage?.removeItem(THEME_SETTINGS_STORAGE_KEY)
+}
 
-  const url = new URL(endpoint, location.href)
-  url.searchParams.set('site', String(siteIndex))
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token || ''}`,
-      'Content-Type': file.type
-    },
-    body: file,
-    cache: 'no-store'
-  })
-  const data = await response.json().catch(() => null)
-  if (!response.ok || !data?.url) {
-    const error = new Error(data?.error || `HTTP ${response.status}`)
-    error.status = response.status
-    error.code = data?.code || ''
-    throw error
+/**
+ * Build the snippet a site owner pastes into the upstream admin
+ * appearance settings ("custom script") to apply settings site-wide.
+ */
+export function exportSiteThemeSnippet(settings) {
+  const value = validateThemeSettings(settings)
+  const compact = {}
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry !== '' && entry !== undefined && entry !== null) compact[key] = entry
   }
-  return data.url
+  return `window.${SITE_THEME_GLOBAL} = ${JSON.stringify(compact)};`
 }
 
 export function applyThemeAppearance(settings, {

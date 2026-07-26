@@ -60,7 +60,7 @@ globalThis.window.addEventListener = () => {}
 Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { language: 'zh-CN' } })
 Object.defineProperty(globalThis, 'location', {
   configurable: true,
-  value: { origin: 'http://127.0.0.1:4173', href: 'http://127.0.0.1:4173/?preview=1', search: '?preview=1' }
+  value: { origin: 'http://127.0.0.1:4173', href: 'http://127.0.0.1:4173/?preview=1', search: '?preview=1', hash: '' }
 })
 
 const storage = new Map()
@@ -80,7 +80,8 @@ const realSetTimeout = globalThis.setTimeout
 globalThis.setInterval = () => 1
 globalThis.clearInterval = () => {}
 
-await import(`${new URL('../src/assets/js/dashboard.js', import.meta.url).href}?smoke=${Date.now()}`)
+const { mount } = await import(`${new URL('../src/assets/js/dashboard.js', import.meta.url).href}?smoke=${Date.now()}`)
+await mount({ name: 'dashboard' })
 await new Promise(resolvePromise => realSetTimeout(resolvePromise, 40))
 
 const cards = nodeFor('#cardGroups').innerHTML
@@ -90,8 +91,11 @@ const online = nodeFor('#onlineCount').textContent
 if (!cards.includes('server-card') || !cards.includes('Tokyo-Edge')) {
   throw new Error('Preview cards did not render')
 }
-if (!cards.includes('lipis/flag-icons@7.3.2/flags/4x3/jp.svg')) {
+if (!cards.includes('/flags/jp.svg')) {
   throw new Error('Flag image URL did not render')
+}
+if (cards.includes('jsdelivr')) {
+  throw new Error('Flags must come from upstream static assets, not a CDN')
 }
 if (!cards.includes('gauge-progress') || cards.includes('conic-gradient')) {
   throw new Error('SVG gauge did not render')
@@ -146,6 +150,6 @@ nodeFor('.view-switch').dispatch('click', { target: { closest: () => ({ dataset:
 if (nodeFor('#tableView').hidden || !nodeFor('#gridView').hidden) throw new Error('Table view toggle failed')
 
 nodeFor('#cardGroups').dispatch('click', { target: { closest: () => ({ dataset: { serverKey: '0:preview-1' } }) } })
-if (!location.href.includes('detail.html') || !location.href.includes('id=preview-1')) throw new Error('Card did not route to themed detail page')
+if (location.hash !== '#/server/preview-1') throw new Error(`Card did not route via hash, got: ${location.hash}`)
 
-console.log('Smoke test passed: render, theme drawer, controls and themed detail routing are working.')
+console.log('Smoke test passed: render, theme drawer, controls and hash detail routing are working.')

@@ -1,117 +1,74 @@
-# 部署到 Cloudflare Workers
+# 部署
 
-CSM-Next 使用 Cloudflare Workers Builds 的 Git 集成。Cloudflare 直接从仓库发布页面，不需要 GitHub Actions，也不需要上传 `dist/`。
+CSM-Next 是纯静态主题,有两种部署方式,可同时启用。日常维护两者的差异与发布节奏见 `docs/MAINTENANCE.md`。
 
-## 第一次部署
+## 方式一:上游主题商店(推荐,零配置)
 
-先把 `CSM-Next` 作为仓库根目录推送到 GitHub 或 GitLab，然后在 Cloudflare 中操作：
+要求 CF-Server-Monitor ≥ 2.7.13 Beta5(带主题商店功能)。
 
-1. 打开 **Workers & Pages**。
-2. 选择 **Create application**。
-3. 在 **Import a repository** 旁选择 **Get started**。
-4. 授权 GitHub 或 GitLab，并选择 CSM-Next 仓库。
-5. Worker 名称填写 `csm-next`。
-6. 生产分支选择 `main`。
-7. **Build command** 留空。
-8. **Deploy command** 保持 `npx wrangler deploy`。
-9. 如果 CSM-Next 就是仓库根目录，**Root directory** 留空；如果整个工作区是一个仓库，则填写 `CSM-Next`。
-10. 选择 **Save and Deploy**。
+1. 主题维护者执行 `npm run release:theme && git push origin theme-dist`,把商店产物发布到 `theme-dist` 分支。
+2. 站长打开自己探针的上游后台(`/admin#admin`)→ **主题商店**。
+3. 在「自定义主题」输入框填:
 
-`wrangler.jsonc` 已经指定 Worker 入口和静态资源目录，默认部署命令会直接完成发布。之后每次推送到 `main`，Cloudflare 都会自动构建并更新线上 Worker。
+   ```text
+   https://github.com/mi0e/CSM-Next/tree/theme-dist
+   ```
 
-配置文件还声明了不带 ID 的 `THEME_SETTINGS` KV binding。Wrangler 的自动资源配置会在首次部署时创建并绑定 namespace；通过 Git 仓库部署时，资源 ID 保留在 Cloudflare 控制台，不会回写仓库。
+4. 点「预览」确认效果,再点「应用」。
 
-## 设置后端地址
+完成。主题与后端同源:不需要配置 API 地址、不需要 CORS、上游后台登录态直接复用。站点标题、背景、自定义脚本继续在上游后台「外观设置」里管理;想把主题抽屉里调好的效果设为全站默认,用抽屉的「复制站点配置」按钮,把片段粘贴到上游后台的「自定义脚本」。
 
-第一次部署结束后，打开刚创建的 Worker：
+注意事项:
 
-1. 进入 **Settings** → **Variables and Secrets**。
-2. 选择 **Add**。
-3. 类型选择普通文本变量。
-4. 变量名填写 `CSM_API_BASE`。
-5. 值填写自己的 CF-Server-Monitor Worker 地址，例如 `https://your-monitor.example.workers.dev`。
-6. 选择 **Deploy** 使变量生效。
+- 上游对主题文件有 1 小时缓存,更新主题后访客端最多延迟 1 小时;后台重新应用可即时刷新。
+- 外域背景图需要站长在上游后台 CSP 设置(`csp_static`)中放行对应域名。
 
-如需连接多个后端，用英文逗号分隔：
+## 方式二:独立静态部署
 
-```text
-https://monitor-a.example.workers.dev,https://monitor-b.example.workers.dev
-```
+产物是标准静态文件(`dist/`),任何静态托管都能跑。跨域部署必须:
 
-还可以在同一位置添加以下可选变量：
+- 页面内有 `<meta name="apiBase" content="https://你的监控worker地址">`(多个用英文逗号分隔)——由 `config/config.local.json` 在构建时注入,或部署后手改 `index.html`。
+- 每个上游 Worker 的环境变量 `CORS_ALLOWED_ORIGINS` 加入主题域名(只填 origin,逗号分隔,不带路径和结尾斜杠)。
 
-- `CSM_SITE_TITLE`：后端未返回 `site_title` 时使用的兜底页面标题；正常情况下主题跟随原站设置。
-- `CSM_BACKGROUND_IMAGE`：KV 中还没有主题设置时使用的初始背景图片地址。
-- `CSM_REFRESH_INTERVAL`：轮询间隔，单位为毫秒，最小 5000。
-- `CSM_CUSTOM_ADMIN_ENABLED`：是否启用实验性主题后台；默认 `false`，管理入口会跳转原站 `/#/admin`。
+### Cloudflare Workers Builds(Git 集成)
 
-即使关闭主题后台，首页和详情页仍可在当前主题域名完成登录授权，用于读取非公开站点、隐藏节点和长历史数据。该登录需要下文的跨域配置。
+1. 打开 **Workers & Pages** → **Create application** → **Import a repository**,选择 CSM-Next 仓库。
+2. Worker 名称 `csm-next`,生产分支 `main`。
+3. **Build command** 填 `npm run build`。
+4. **Deploy command** 保持 `npx wrangler deploy`。
+5. Root directory:仓库根即 CSM-Next 时留空。
+6. **Save and Deploy**。
 
-## KV 主题设置
+`wrangler.jsonc` 已声明纯静态资产部署(`assets.directory = ./dist`,无 Worker 代码、无 KV)。此后每次推送 `main` 自动发布。
 
-首页齿轮打开主题设置抽屉。设置 JSON 与上传背景分别使用 `theme-settings:v1` 和 `theme-assets/background` 两个 KV key：
+`config.local.json` 不进 Git,CI 构建时通过**构建环境变量**注入后端地址(与上游静态主题构建同名约定):在 Worker 的 **Settings → Build → Variables and Secrets** 添加:
 
-- 主题设置公开读取，便于所有访客获得统一外观。
-- 保存设置和上传背景必须携带主题域名下保存的上游 JWT。
-- Worker 通过上游 `/admin/api` 的无副作用未知 action 验证 JWT，不读取上游敏感设置。
-- 图片限制为 2 MB，并验证文件 MIME 与实际文件头；SVG 和任意文件不允许上传。
-- 透明化开关、柔和/毛玻璃模式、透明强度和模糊强度均保存在同一份主题设置 JSON 中。
-- 自定义 CSS 最大 20,000 字符，禁止外部资源和可执行内容。
-- KV 是最终一致存储；当前页面保存后立即应用，其他地区的访问最多可能短暂读到旧值。
+| 变量 | 说明 |
+| --- | --- |
+| `API_BASE` | 必填(跨域部署时)。监控 Worker 地址,多个用英文逗号分隔,构建时写入 `<meta name="apiBase">` |
+| `TITLE` | 选填。写入 `<title>` 作为标题兜底 |
+| `REFRESH_INTERVAL` | 选填。轮询间隔毫秒 |
 
-这些操作只消耗 CSM-Next 自己的 Worker/KV 请求，不写入 CF-Server-Monitor 的 D1。
+同源部署(主题与监控 Worker 同一域名)则什么都不用配。
 
-`wrangler.jsonc` 已启用 `keep_vars`，因此以后 Git 自动部署不会删除这些控制台变量。
+### 从旧版部署升级(重要)
 
-## 允许跨域访问
+老版本(自带 Worker + KV)的 `csm-next` 应用**不需要删除**:推送新代码后同一个 Worker 会被重新部署为纯静态资产。但必须做两件事:
 
-部署完成后会得到类似下面的地址：
+1. 在 Cloudflare 控制台把 **Build command** 从空改为 `npm run build`(老版本直接托管 `src/`,新版本需要构建 `dist/`),并按上表添加 `API_BASE` 构建变量。
+2. 旧的运行时变量(`CSM_API_BASE`、`CSM_SITE_TITLE` 等)与 `THEME_SETTINGS` KV namespace 不再被读取。想保留旧的全站主题设置,升级前先记下抽屉里的配置(或升级后重新调一遍并「复制站点配置」到上游后台);之后可在 **Storage & Databases → KV** 删除该 namespace、在 Worker 设置里删除旧变量。留着也无害,只是闲置。
 
-```text
-https://csm-next.你的-workers-subdomain.workers.dev
-```
+如果你只打算走主题商店模式,也可以直接删除整个 `csm-next` Worker——商店模式完全不依赖这个独立部署。
 
-回到 CF-Server-Monitor 后端 Worker，把这个来源加入 `CORS_ALLOWED_ORIGINS`，不要带末尾 `/`：
+### 其他静态托管(Pages / GitHub Pages / 任意)
 
-```text
-https://csm-next.你的-workers-subdomain.workers.dev
-```
+本地 `npm run build` 后把 `dist/` 交给托管平台即可。GitHub Pages 用户同样确保 meta apiBase 与上游 CORS 配置到位。
 
-如果变量已经存在，用英文逗号追加，不要覆盖原来的来源：
+## 从旧版本(≤0.1.0 自带 Worker 架构)迁移
 
-```text
-https://原有域名,https://csm-next.你的-workers-subdomain.workers.dev
-```
+旧架构的自有 Worker、KV 主题设置与实验性 admin 已移除:
 
-绑定自定义域名后，也要把新域名加入该变量。
-
-## 在本地用 Wrangler 部署
-
-Git 自动部署之外，也可以从本地发布：
-
-```powershell
-npm install
-npx wrangler login
-npm run cf:deploy
-```
-
-本地预览 Worker 路由：
-
-```powershell
-Copy-Item .\.dev.vars.example .\.dev.vars
-npm run cf:dev
-```
-
-复制后先把 `.dev.vars` 中的示例地址改成自己的后端地址。该文件已被 Git 忽略。
-
-## 普通静态托管
-
-如果仍要使用 Cloudflare Pages、Nginx 或其他静态托管，先运行：
-
-```powershell
-npm run build
-```
-
-然后上传 `dist/` 中的文件。普通静态托管使用 `config/config.local.json` 或 `config/config.example.json`，与 Worker 的运行时变量是两套独立配置。
-
-主题抽屉的全站保存与文件上传依赖 `worker/index.js` 和 KV binding；纯静态托管只能继续通过 `config.json` 设置背景，不能使用 KV 持久化。
+- **KV 里的主题设置不再被读取**。迁移方法:部署新版后在抽屉里重新调一遍样式 → 「复制站点配置」→ 粘贴到上游后台「自定义脚本」,即可恢复全站默认外观。
+- **上传到 KV 的背景图失效**。把图片换成外链 URL(注意 CSP 放行),或提交到主题仓库 `src/assets/` 随主题分发。
+- 旧的 `CSM_*` 环境变量与 `THEME_SETTINGS` KV binding 不再使用,可在 Cloudflare 控制台删除。
+- 旧收藏链接 `detail.html?id=...` 会自动跳转到新地址 `#/server/...`。
