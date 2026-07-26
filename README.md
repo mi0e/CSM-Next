@@ -68,6 +68,8 @@ Copy-Item .\config\config.example.json .\config\config.local.json
 
 `apiBase` 可以填写多个 Worker 地址。`config.local.json` 已加入 `.gitignore`，不会随代码提交。
 
+没有 `config.json`（或其 `apiBase` 为空）时，前台会按上游静态主题约定回退读取页面里的 `<meta name="apiBase" content="https://a,https://b">`（多个地址用英文逗号分隔），再回退到同源地址。跨域部署时记得在每个 Worker 的 `CORS_ALLOWED_ORIGINS` 环境变量中加入主题域名。
+
 启动本地页面：
 
 ```powershell

@@ -6,6 +6,8 @@
     <meta name="description" content="CSM-Next：CF-Server-Monitor 独立前端主题">
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#f8f9fb">
+    <!-- 上游静态主题约定：无 config.json（或其 apiBase 为空）时从此 meta 读取后端地址，多个用英文逗号分隔 -->
+    <!-- <meta name="apiBase" content="https://your-worker.example.com"> -->
     <title>Server Monitor</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2317191d'/%3E%3Cpath d='M46 20c-4-4-8-6-14-6-10 0-18 8-18 18s8 18 18 18c6 0 11-2 15-7l-7-6c-2 3-5 4-8 4-5 0-9-4-9-9s4-9 9-9c3 0 6 1 8 4z' fill='white'/%3E%3C/svg%3E">
     <link rel="stylesheet" href="./assets/css/main.css?v=20260717-probe-lucide">
@@ -190,62 +192,72 @@
 
       <form id="themeSettingsForm" class="theme-settings-form">
         <fieldset id="themeSettingsFields">
-          <label class="theme-settings-field">
-            <span data-i18n="themeBackground">背景图片</span>
-            <input id="themeBackgroundImage" type="url" inputmode="url" placeholder="https://example.com/background.webp">
-            <small data-i18n="themeBackgroundHint">仅允许 HTTPS 图片地址；留空表示不使用背景图。</small>
-          </label>
-
-          <label class="theme-settings-field">
-            <span data-i18n="themeBackgroundUpload">上传本地图片</span>
-            <input id="themeBackgroundUpload" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif">
-            <small data-i18n="themeUploadHint">支持 JPG、PNG、WebP、GIF、AVIF，最大 2 MB；上传后自动设为背景。</small>
-          </label>
-
-          <section class="theme-transparency-setting">
-            <label class="theme-settings-toggle" for="themeTransparencyEnabled">
-              <span>
-                <b data-i18n="themeTransparency">界面透明化</b>
-                <small data-i18n="themeTransparencyHint">独立控制卡片和顶部栏的透明效果。</small>
-              </span>
-              <input id="themeTransparencyEnabled" type="checkbox" role="switch">
-              <i aria-hidden="true"></i>
-            </label>
-
-            <div id="themeTransparencyOptions" class="theme-transparency-options" hidden>
-              <div class="theme-settings-field">
-                <span id="themeTransparencyModeLabel" data-i18n="themeTransparencyMode">透明方案</span>
-                <div class="theme-transparency-modes" role="radiogroup" aria-labelledby="themeTransparencyModeLabel">
-                  <label>
-                    <input id="themeTransparencySoft" type="radio" name="themeTransparencyMode" value="soft" checked>
-                    <span><strong data-i18n="themeTransparencySoft">柔和透明</strong><small data-i18n="themeTransparencySoftHint">仅透明，不模糊后方内容。</small></span>
-                  </label>
-                  <label>
-                    <input id="themeTransparencyGlass" type="radio" name="themeTransparencyMode" value="glass">
-                    <span><strong data-i18n="themeTransparencyGlass">毛玻璃</strong><small data-i18n="themeTransparencyGlassHint">透明并模糊后方内容。</small></span>
-                  </label>
-                </div>
-              </div>
-
+          <section class="theme-settings-group" data-theme-group="background">
+            <div class="theme-settings-group-body">
               <label class="theme-settings-field">
-                <span><i data-i18n="themeTransparencyIntensity">透明强度</i><output id="themeTransparencyOutput">0%</output></span>
-                <input id="themeTransparencyIntensity" type="range" min="0" max="80" step="5" value="0">
-                <small data-i18n="themeTransparencyIntensityHint">数值越高，卡片和顶部栏越透明。</small>
+                <span data-i18n="themeBackground">图片地址</span>
+                <input id="themeBackgroundImage" type="url" inputmode="url" placeholder="https://example.com/background.webp">
+                <small data-i18n="themeBackgroundHint">仅允许 HTTPS 图片地址；留空表示不使用背景图。</small>
               </label>
 
-              <label id="themeBlurField" class="theme-settings-field" hidden>
-                <span><i data-i18n="themeBlurIntensity">毛玻璃强度</i><output id="themeBlurOutput">18px</output></span>
-                <input id="themePanelBlur" type="range" min="0" max="30" step="1" value="18">
-                <small data-i18n="themeBlurIntensityHint">只在毛玻璃方案下生效。</small>
+              <label class="theme-settings-field">
+                <span data-i18n="themeBackgroundUpload">上传本地图片</span>
+                <input id="themeBackgroundUpload" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif">
+                <small data-i18n="themeUploadHint">支持 JPG、PNG、WebP、GIF、AVIF，最大 2 MB；上传后自动设为背景。</small>
               </label>
             </div>
           </section>
 
-          <label class="theme-settings-field">
-            <span data-i18n="themeCustomCss">自定义 CSS</span>
-            <textarea id="themeCustomCss" rows="11" maxlength="20000" spellcheck="false" placeholder=":root { --primary: #5aa0f8; }"></textarea>
-            <small data-i18n="themeCssHint">不允许 @import、url() 或脚本；外部资源请使用背景图片设置。</small>
-          </label>
+          <section class="theme-settings-group" data-theme-group="effects">
+            <div class="theme-settings-group-body">
+              <label class="theme-settings-toggle" for="themeTransparencyEnabled">
+                <span>
+                  <b data-i18n="themeTransparency">界面透明化</b>
+                  <small data-i18n="themeTransparencyHint">独立控制卡片和顶部栏的透明效果。</small>
+                </span>
+                <input id="themeTransparencyEnabled" type="checkbox" role="switch">
+                <i aria-hidden="true"></i>
+              </label>
+
+              <div id="themeTransparencyOptions" class="theme-transparency-options" hidden>
+                <div class="theme-settings-field">
+                  <span id="themeTransparencyModeLabel" data-i18n="themeTransparencyMode">透明方案</span>
+                  <div class="theme-transparency-modes" role="radiogroup" aria-labelledby="themeTransparencyModeLabel">
+                    <label>
+                      <input id="themeTransparencySoft" type="radio" name="themeTransparencyMode" value="soft" checked>
+                      <span><strong data-i18n="themeTransparencySoft">柔和透明</strong><small data-i18n="themeTransparencySoftHint">仅透明，不模糊后方内容。</small></span>
+                    </label>
+                    <label>
+                      <input id="themeTransparencyGlass" type="radio" name="themeTransparencyMode" value="glass">
+                      <span><strong data-i18n="themeTransparencyGlass">毛玻璃</strong><small data-i18n="themeTransparencyGlassHint">透明并模糊后方内容。</small></span>
+                    </label>
+                  </div>
+                </div>
+
+                <label class="theme-settings-field">
+                  <span><i data-i18n="themeTransparencyIntensity">透明强度</i><output id="themeTransparencyOutput">0%</output></span>
+                  <input id="themeTransparencyIntensity" type="range" min="0" max="80" step="5" value="0">
+                  <small data-i18n="themeTransparencyIntensityHint">数值越高，卡片和顶部栏越透明。</small>
+                </label>
+
+                <label id="themeBlurField" class="theme-settings-field" hidden>
+                  <span><i data-i18n="themeBlurIntensity">毛玻璃强度</i><output id="themeBlurOutput">18px</output></span>
+                  <input id="themePanelBlur" type="range" min="0" max="30" step="1" value="18">
+                  <small data-i18n="themeBlurIntensityHint">只在毛玻璃方案下生效。</small>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section class="theme-settings-group" data-theme-group="advanced">
+            <div class="theme-settings-group-body">
+              <label class="theme-settings-field">
+                <span data-i18n="themeCustomCss">自定义 CSS</span>
+                <textarea id="themeCustomCss" rows="11" maxlength="20000" spellcheck="false" placeholder=":root { --primary: #5aa0f8; }"></textarea>
+                <small data-i18n="themeCssHint">不允许 @import、url() 或脚本；外部资源请使用背景图片设置。</small>
+              </label>
+            </div>
+          </section>
         </fieldset>
 
         <p id="themeSettingsError" class="theme-settings-error" role="alert" hidden></p>

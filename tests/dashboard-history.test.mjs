@@ -86,8 +86,20 @@ globalThis.IntersectionObserver = class {
   disconnect() {}
 }
 
+const sockets = []
 globalThis.WebSocket = class {
-  addEventListener() {}
+  constructor(url) {
+    this.url = String(url)
+    this.listeners = new Map()
+    sockets.push(this)
+  }
+  addEventListener(type, callback) {
+    if (!this.listeners.has(type)) this.listeners.set(type, [])
+    this.listeners.get(type).push(callback)
+  }
+  emit(type, event = {}) {
+    for (const callback of this.listeners.get(type) || []) callback(event)
+  }
   send() {}
   close() {}
 }
@@ -106,7 +118,7 @@ globalThis.fetch = async input => {
     servers: [{
       id: 'node-1', name: 'Node One', region: 'HK', server_group: 'Default', os: 'Debian', arch: 'amd64',
       cpu: 1, ram_total: 1024, ram_used: 128, disk_total: 10240, disk_used: 1024,
-      ping_ct: 45, ping_cu: 55, ping_cm: 65, ping_bd: 75,
+      ping_ct: 45, ping_cu: 155, ping_cm: 65, ping_bd: 'false',
       loss_ct: 0, loss_cu: 0, loss_cm: 0, loss_bd: 0,
       last_updated: now, report_timestamp: now
     }],
@@ -128,9 +140,37 @@ await import(`${new URL('../src/assets/js/dashboard.js', import.meta.url).href}?
 await new Promise(resolve => realSetTimeout(resolve, 240))
 
 const cards = nodeFor('#cardGroups').innerHTML
-if (historyFetches !== 1) throw new Error(`Expected one lazy history request, received ${historyFetches}`)
-if (!cards.includes('data-probe-source="history"')) throw new Error('History response did not replace current probe bars')
-if ((cards.match(/data-probe-bucket=/g) || []).length !== 48) throw new Error('Expected 24 latency and 24 loss time buckets')
-if (!cards.includes('最近 1 小时')) throw new Error('One-hour window label did not render')
+if (historyFetches !== 0) throw new Error(`Probe block must not request history, received ${historyFetches} calls`)
+if (!cards.includes('>CT<') || !cards.includes('45 ms')) throw new Error('Live probe values did not render')
+if (!cards.includes('ping-value warn') || !cards.includes('155 ms')) throw new Error('Warn-level latency color did not render')
+if (cards.includes('>BD<')) throw new Error('Disabled probe line must be hidden')
+if (!cards.includes('实时采样')) throw new Error('Pre-trend label did not render')
+if (cards.includes('ping-sparkline')) throw new Error('Sparkline must wait for at least two session samples')
 
-console.log('Dashboard history smoke test passed: visible card loaded one real one-hour timeline.')
+const socket = sockets.find(item => item.url.includes('/api/ws'))
+if (!socket) throw new Error('Dashboard did not open a WebSocket')
+socket.emit('open')
+socket.emit('message', {
+  data: JSON.stringify({
+    type: 'batchUpdate',
+    ts: now,
+    updates: [{
+      serverId: 'node-1',
+      samples: [
+        { ts: now - 120_000, data: { ping_ct: 60, ping_cu: 70, ping_cm: 80, cpu: 2 } },
+        { ts: now - 1_000, data: { ping_ct: 90, ping_cu: 100, ping_cm: 110, cpu: 3 } }
+      ]
+    }]
+  })
+})
+await new Promise(resolve => realSetTimeout(resolve, 160))
+
+const updated = nodeFor('#cardGroups').innerHTML
+if (historyFetches !== 0) throw new Error(`WebSocket samples must not trigger history requests, received ${historyFetches}`)
+if (!updated.includes('90 ms')) throw new Error('WebSocket sample did not refresh live probe values')
+if (!updated.includes('ping-sparkline') || !updated.includes('<polyline points=')) {
+  throw new Error('Session sparkline did not render from WebSocket samples')
+}
+if (!updated.includes('实时趋势')) throw new Error('Trend label did not render')
+
+console.log('Dashboard probe smoke test passed: request-free live values plus a WebSocket-fed session trend.')

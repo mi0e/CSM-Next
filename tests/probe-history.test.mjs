@@ -55,3 +55,52 @@ test('probe history merge deduplicates timestamps and drops samples outside the 
     { timestamp: now - minute, ping_ct: 30 }
   ])
 })
+
+const { pingSparkline } = await import('../src/assets/js/shared/probe-history.js')
+
+test('pingSparkline needs at least two usable samples', () => {
+  const now = 1_700_000_600_000
+  assert.equal(pingSparkline([], { now }), null)
+  assert.equal(pingSparkline([{ timestamp: now - 1000, ping_ct: 40 }], { now }), null)
+  // Rows without any positive latency are skipped entirely.
+  assert.equal(pingSparkline([
+    { timestamp: now - 2000, loss_ct: 5 },
+    { timestamp: now - 1000, loss_ct: 6 }
+  ], { now }), null)
+})
+
+test('pingSparkline averages lines per row and normalizes to the view box', () => {
+  const now = 1_700_000_600_000
+  const spark = pingSparkline([
+    { timestamp: now - 4 * 60 * 1000, ping_ct: 40, ping_cu: 60 },
+    { timestamp: now - 2 * 60 * 1000, ping_ct: 100 },
+    { timestamp: now, ping_ct: 80, ping_bd: 120 }
+  ], { now, width: 100, height: 28, pad: 2 })
+  assert.ok(spark)
+  assert.equal(spark.count, 3)
+  assert.equal(spark.min, 50)
+  assert.equal(spark.max, 100)
+  assert.equal(spark.latest, 100)
+  const points = spark.points.split(' ').map(pair => pair.split(',').map(Number))
+  assert.equal(points.length, 3)
+  // Session shorter than the 5-minute floor: first point sits inside the window.
+  assert.ok(points[0][0] > 0 && points[0][0] < points[1][0] && points[1][0] < points[2][0])
+  assert.equal(points[2][0], 100)
+  points.forEach(([x, y]) => {
+    assert.ok(x >= 0 && x <= 100)
+    assert.ok(y >= 2 && y <= 26)
+  })
+  // Higher latency maps to a smaller y (drawn nearer the top).
+  assert.ok(points[1][1] < points[0][1])
+})
+
+test('pingSparkline window grows with the session span', () => {
+  const now = 1_700_000_600_000
+  const spark = pingSparkline([
+    { timestamp: now - 40 * 60 * 1000, ping_ct: 50 },
+    { timestamp: now, ping_ct: 70 }
+  ], { now })
+  assert.equal(spark.spanMs, 40 * 60 * 1000)
+  const first = spark.points.split(' ')[0].split(',').map(Number)
+  assert.equal(first[0], 0)
+})

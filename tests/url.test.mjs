@@ -6,7 +6,7 @@ globalThis.location = {
   href: 'https://theme.example/'
 }
 
-const { sanitizeBackgroundImage, applyBackgroundImage, joinUrl, normalizeBase } = await import('../src/assets/js/shared/url.js')
+const { sanitizeBackgroundImage, applyBackgroundImage, joinUrl, metaApiBases, normalizeBase } = await import('../src/assets/js/shared/url.js')
 const { isCustomAdminEnabled, originalAdminUrl, resolveAdminUrl } = await import('../src/assets/js/shared/admin.js')
 
 test('sanitizeBackgroundImage allows https only', () => {
@@ -69,4 +69,20 @@ test('admin URL defaults upstream and only uses theme admin when enabled', () =>
     resolveAdminUrl({}, { ...options, preview: true }),
     'https://theme.example/admin.html?preview=1&site=2'
   )
+})
+
+test('metaApiBases reads the upstream meta tag convention', () => {
+  const doc = (content) => ({
+    querySelector: (selector) => selector === 'meta[name="apiBase"]' && content !== null
+      ? { getAttribute: () => content }
+      : null
+  })
+  assert.deepEqual(
+    metaApiBases(doc(' https://a.example , https://b.example ')),
+    ['https://a.example', 'https://b.example']
+  )
+  assert.deepEqual(metaApiBases(doc('https://a.example')), ['https://a.example'])
+  assert.deepEqual(metaApiBases(doc('')), [])
+  assert.deepEqual(metaApiBases(doc(null)), [])
+  assert.deepEqual(metaApiBases(null), [])
 })

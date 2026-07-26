@@ -9,7 +9,7 @@ import {
 import { applyThemeAppearance, loadThemeSettings } from './shared/theme.js'
 import { normalizeThemeSettings } from './shared/theme-settings.js'
 import { resolveSiteTitle } from './shared/title.js'
-import { joinUrl, normalizeBase } from './shared/url.js'
+import { joinUrl, metaApiBases, normalizeBase } from './shared/url.js'
 
 const ONLINE_THRESHOLD = 5 * 60 * 1000
 const MB = 1024 * 1024
@@ -28,7 +28,7 @@ const translations = {
     username: '用户名', password: '密码', login: '登录', cancel: '取消', openAdmin: '打开原站后台',
     loginSuccess: '登录成功，正在载入历史数据', loginFailed: '登录失败，请检查账号密码',
     loginMissing: '请输入用户名和密码', loginTurnstile: '请先完成安全验证',
-    historyFailed: '历史数据载入失败', current: '当前', telecom: '电信 TCP', unicom: '联通 TCP', mobile: '移动 TCP', backup: '备用线路',
+    historyFailed: '历史数据载入失败', databaseUpgrade: '后端数据库需要升级，请在上游管理后台完成升级后重试', current: '当前', telecom: '电信 TCP', unicom: '联通 TCP', mobile: '移动 TCP', backup: '备用线路',
     loss: '丢包', volatility: '波动', refreshed: '详情已刷新', invalidId: '缺少服务器 ID',
     justNow: '刚刚', ago: '{value}前', dayShort: '天', hourShort: '时', minuteShort: '分', secondShort: '秒'
   },
@@ -45,7 +45,7 @@ const translations = {
     username: 'Username', password: 'Password', login: 'Sign in', cancel: 'Cancel', openAdmin: 'Open original admin',
     loginSuccess: 'Signed in. Loading history…', loginFailed: 'Sign-in failed. Check username and password.',
     loginMissing: 'Enter username and password', loginTurnstile: 'Complete the security check first',
-    historyFailed: 'Failed to load history', current: 'Current', telecom: 'Telecom TCP', unicom: 'Unicom TCP', mobile: 'Mobile TCP', backup: 'Backup',
+    historyFailed: 'Failed to load history', databaseUpgrade: 'The backend database needs an upgrade. Finish it in the upstream admin panel, then retry.', current: 'Current', telecom: 'Telecom TCP', unicom: 'Unicom TCP', mobile: 'Mobile TCP', backup: 'Backup',
     loss: 'Loss', volatility: 'Vol', refreshed: 'Detail refreshed', invalidId: 'Missing server ID',
     justNow: 'just now', ago: '{value} ago', dayShort: 'd', hourShort: 'h', minuteShort: 'm', secondShort: 's'
   }
@@ -182,12 +182,19 @@ function currentBase() {
 }
 
 async function loadConfig() {
+  let config = {}
   try {
     const response = await fetch('./config.json', { cache: 'no-store' })
     if (!response.ok) throw new Error(`config.json: ${response.status}`)
-    return await response.json()
-  } catch {
-    return { apiBase: [], title: 'CF-Server-Monitor', backgroundImage: '', customAdminEnabled: false }
+    config = await response.json() || {}
+  } catch { /* fall through to meta/same-origin defaults */ }
+  const configured = (Array.isArray(config.apiBase) ? config.apiBase : config.apiBase ? [config.apiBase] : []).filter(Boolean)
+  return {
+    title: 'CF-Server-Monitor',
+    backgroundImage: '',
+    customAdminEnabled: false,
+    ...config,
+    apiBase: configured.length ? configured : metaApiBases()
   }
 }
 
@@ -604,6 +611,11 @@ async function loadHistory(hours = state.hours, button = null) {
       showHistoryNotice(message)
       showToast(message)
       openLoginModal(hours)
+      return
+    }
+    if (error.status === 409) {
+      const message = t('databaseUpgrade')
+      showHistoryNotice(message); showToast(message)
       return
     }
     const message = `${t('historyFailed')}: ${error.message}`
