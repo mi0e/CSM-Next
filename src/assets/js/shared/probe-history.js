@@ -5,7 +5,7 @@ export const PROBE_LINES = Object.freeze([
   Object.freeze({ id: 'BD', ping: 'ping_bd', loss: 'loss_bd' })
 ])
 
-export const PROBE_HISTORY_HOURS = 1
+export const PROBE_HISTORY_HOURS = 24
 export const PROBE_HISTORY_BUCKETS = 24
 
 function timestamp(value) {
@@ -18,6 +18,7 @@ function metric(value, type) {
   if (value === null || value === undefined || value === '') return null
   const number = Number(value)
   if (!Number.isFinite(number) || number < 0) return null
+  if (type === 'latency' && number === 0) return null
   if (type === 'loss' && number > 100) return null
   return number
 }
@@ -29,6 +30,7 @@ function average(values) {
 function rowsFrom(value) {
   if (Array.isArray(value)) return value
   if (Array.isArray(value?.rows)) return value.rows
+  if (Array.isArray(value?.data)) return value.data
   return []
 }
 
@@ -50,13 +52,15 @@ export function normalizeProbeHistory(value) {
 export function mergeProbeHistory(existing, incoming, {
   now = Date.now(),
   hours = PROBE_HISTORY_HOURS,
-  maxRows = 1000
+  maxRows = 1600,
+  bucketMs = 0
 } = {}) {
   const cutoff = now - hours * 60 * 60 * 1000
   const rows = new Map()
   for (const row of [...normalizeProbeHistory(existing), ...normalizeProbeHistory(incoming)]) {
     if (row.timestamp < cutoff || row.timestamp > now + 60_000) continue
-    rows.set(row.timestamp, { ...(rows.get(row.timestamp) || {}), ...row })
+    const key = bucketMs > 0 ? Math.floor(row.timestamp / bucketMs) * bucketMs : row.timestamp
+    rows.set(key, { ...(rows.get(key) || {}), ...row })
   }
   return [...rows.values()]
     .sort((left, right) => left.timestamp - right.timestamp)

@@ -103,11 +103,14 @@ if (!cards.includes('gauge-progress') || cards.includes('conic-gradient')) {
 if (!cards.includes('ping-item') || !cards.includes('>CT<')) {
   throw new Error('Live probe value list did not render')
 }
-if (!cards.includes('ping-sparkline') || !cards.includes('实时趋势')) {
-  throw new Error('Preview session sparkline did not render')
+if (!cards.includes('probe-timeline') || !cards.includes('过去 24 小时')) {
+  throw new Error('Preview 24-hour latency timeline did not render')
 }
-if (cards.includes('data-probe-bucket') || cards.includes('probe-bars')) {
-  throw new Error('Legacy probe timeline markup is still rendered')
+if ((cards.match(/data-probe-bucket=/g) || []).length !== 8 * 24) {
+  throw new Error('Every preview card must render exactly 24 equal timeline blocks')
+}
+if (cards.includes('ping-sparkline')) {
+  throw new Error('Preview should use the complete history timeline instead of a session sparkline')
 }
 if (String(total) !== '8' || String(online) !== '7') {
   throw new Error(`Unexpected preview stats: total=${total}, online=${online}`)

@@ -15,7 +15,10 @@ import {
 import {
   normalizeThemeSettings, validateThemeSettings
 } from './shared/theme-settings.js'
-import { mergeProbeHistory, pingSparkline, PROBE_LINES } from './shared/probe-history.js'
+import {
+  mergeProbeHistory, normalizeProbeHistory, pingSparkline,
+  PROBE_HISTORY_BUCKETS, PROBE_HISTORY_HOURS, PROBE_LINES, summarizeProbeHistory
+} from './shared/probe-history.js'
 import { isPingDisabled, isPingValid, pingLevel } from './shared/ping.js'
 import { serverRouteHash } from './shared/route.js'
 import { injectedSiteTitle, resolveSiteTitle } from './shared/title.js'
@@ -25,6 +28,11 @@ const ONLINE_THRESHOLD = 5 * 60 * 1000
 const DEFAULT_REFRESH_INTERVAL = 60 * 1000
 const MB = 1024 * 1024
 const GB = 1024 * MB
+const PROBE_HISTORY_CONCURRENCY = 4
+const PROBE_HISTORY_CACHE_TTL = 10 * 60 * 1000
+const PROBE_HISTORY_CACHE_VERSION = 2
+const PROBE_HISTORY_LIVE_BUCKET_MS = 60 * 1000
+const PROBE_HISTORY_POINT_OPTIONS = new Set([60, 120, 180, 240])
 
 const translations = {
   zh: {
@@ -105,6 +113,12 @@ const translations = {
     pingStats: '探针状态',
     latency: '延迟',
     liveTrend: '实时趋势',
+    historyLatency: '历史延迟',
+    last24Hours: '过去 24 小时',
+    historyAverage: '平均 {value} ms',
+    historyLoading: '正在载入完整历史…',
+    historyUnavailable: '历史暂不可用',
+    historyNoData: '暂无历史数据',
     trafficLimit: '流量限额',
     uptime: '运行',
     expired: '已到期',
@@ -197,6 +211,12 @@ const translations = {
     pingStats: 'Probe Stats',
     latency: 'Latency',
     liveTrend: 'Live trend',
+    historyLatency: 'Historical latency',
+    last24Hours: 'Past 24 hours',
+    historyAverage: 'Avg {value} ms',
+    historyLoading: 'Loading complete history…',
+    historyUnavailable: 'History unavailable',
+    historyNoData: 'No historical data',
     trafficLimit: 'Traffic Limit',
     uptime: 'up',
     expired: 'Expired',
@@ -253,7 +273,13 @@ function createState() {
     themeSettingsLoaded: false,
     themeSettingsBusy: false,
     themeDrawerOpen: false,
-    probeHistories: new Map()
+    probeHistories: new Map(),
+    probeHistoryStates: new Map(),
+    probeHistoryQueue: [],
+    probeHistoryQueued: new Set(),
+    probeHistoryActive: 0,
+    probeObserver: null,
+    destroyed: false
   }
 }
 
@@ -1038,8 +1064,10 @@ function previewServers() {
 function previewProbeHistory(server, seed = 0) {
   const now = Date.now()
   const latest = toTimestamp(server.last_updated) || now
-  return Array.from({ length: 60 }, (_, index) => {
-    const sampleTime = now - (59 - index) * 60_000
+  const sampleCount = 120
+  const sampleInterval = PROBE_HISTORY_HOURS * 60 * 60 * 1000 / sampleCount
+  return Array.from({ length: sampleCount }, (_, index) => {
+    const sampleTime = now - (sampleCount - 1 - index) * sampleInterval
     if (sampleTime > latest) return null
     const row = { timestamp: sampleTime }
     PROBE_LINES.forEach((line, lineIndex) => {
@@ -1061,11 +1089,17 @@ function previewProbeHistory(server, seed = 0) {
   }).filter(Boolean)
 }
 
-// Session-only trend pool fed by live WebSocket samples, poll refreshes and
-// the upstream connect replay — deliberately no /api/history/all requests.
 function storeProbeSamples(key, incoming) {
   if (!key) return
-  state.probeHistories.set(key, mergeProbeHistory(state.probeHistories.get(key) || [], incoming))
+  state.probeHistories.set(key, mergeProbeHistory(
+    state.probeHistories.get(key) || [],
+    incoming,
+    {
+      hours: PROBE_HISTORY_HOURS,
+      maxRows: 1600,
+      bucketMs: PROBE_HISTORY_LIVE_BUCKET_MS
+    }
+  ))
 }
 
 function currentProbeSample(server) {
@@ -1082,11 +1116,147 @@ function seedCurrentProbeSamples(servers = state.servers) {
   servers.forEach(server => storeProbeSamples(server._sourceKey, [currentProbeSample(server)]))
 }
 
+function probeHistoryPoints(siteIndex) {
+  const site = state.sites[siteIndex]
+  const value = site?.config?.long_history_points ?? state.siteConfigs[siteIndex]?.long_history_points
+  const points = Number(value)
+  return PROBE_HISTORY_POINT_OPTIONS.has(points) ? points : 0
+}
+
+function supportsProbeHistory(server) {
+  return state.preview || probeHistoryPoints(server?._siteIndex) > 0
+}
+
+function probeHistoryCacheKey(site, server) {
+  const base = site?.base || location.origin
+  return `csm-next-probe-history:v${PROBE_HISTORY_CACHE_VERSION}:${PROBE_HISTORY_HOURS}:${encodeURIComponent(base)}:${server.id}`
+}
+
+function readCachedProbeHistory(site, server) {
+  try {
+    if (typeof sessionStorage === 'undefined') return null
+    const key = probeHistoryCacheKey(site, server)
+    const cached = JSON.parse(sessionStorage.getItem(key) || 'null')
+    if (!cached || Date.now() - Number(cached.savedAt) > PROBE_HISTORY_CACHE_TTL) {
+      sessionStorage.removeItem(key)
+      return null
+    }
+    return normalizeProbeHistory(cached.rows)
+  } catch {
+    return null
+  }
+}
+
+function cacheProbeHistory(site, server, rows) {
+  try {
+    if (typeof sessionStorage === 'undefined') return
+    sessionStorage.setItem(probeHistoryCacheKey(site, server), JSON.stringify({
+      savedAt: Date.now(),
+      rows: normalizeProbeHistory(rows)
+    }))
+  } catch { /* storage may be disabled or full */ }
+}
+
+async function loadProbeHistory(server) {
+  const key = server?._sourceKey
+  const site = state.sites[server?._siteIndex]
+  const mountState = state
+  if (!key || !site || !supportsProbeHistory(server)) return
+
+  mountState.probeHistoryStates.set(key, 'loading')
+  scheduleRender()
+  try {
+    const cached = readCachedProbeHistory(site, server)
+    if (cached !== null) {
+      if (state !== mountState || mountState.destroyed || !findServer(key)) return
+      storeProbeSamples(key, cached)
+      mountState.probeHistoryStates.set(key, 'loaded')
+      scheduleRender()
+      return
+    }
+
+    const { data } = await requestJson(
+      site,
+      `/api/history/all?id=${encodeURIComponent(server.id)}&hours=${PROBE_HISTORY_HOURS}`
+    )
+    if (state !== mountState || mountState.destroyed || !findServer(key)) return
+    const rows = normalizeProbeHistory(data)
+    storeProbeSamples(key, rows)
+    cacheProbeHistory(site, server, rows)
+    mountState.probeHistoryStates.set(key, 'loaded')
+    scheduleRender()
+  } catch (error) {
+    if (state !== mountState || mountState.destroyed) return
+    mountState.probeHistoryStates.set(key, 'error')
+    console.warn(`[probe-history] unable to load ${key}`, error)
+    scheduleRender()
+  }
+}
+
+function pumpProbeHistoryQueue() {
+  while (state.probeHistoryActive < PROBE_HISTORY_CONCURRENCY && state.probeHistoryQueue.length) {
+    const server = state.probeHistoryQueue.shift()
+    const key = server?._sourceKey
+    state.probeHistoryQueued.delete(key)
+    if (!key || state.probeHistoryStates.get(key) !== 'queued') continue
+    state.probeHistoryActive += 1
+    const mountState = state
+    loadProbeHistory(server).finally(() => {
+      if (state !== mountState) return
+      mountState.probeHistoryActive = Math.max(0, mountState.probeHistoryActive - 1)
+      if (!mountState.destroyed) pumpProbeHistoryQueue()
+    })
+  }
+}
+
+function queueProbeHistory(server) {
+  const key = server?._sourceKey
+  if (!key || !supportsProbeHistory(server)) return
+  const status = state.probeHistoryStates.get(key)
+  if (status === 'queued' || status === 'loading' || status === 'loaded' || status === 'error') return
+  state.probeHistoryStates.set(key, 'queued')
+  state.probeHistoryQueued.add(key)
+  state.probeHistoryQueue.push(server)
+  pumpProbeHistoryQueue()
+}
+
+function observeVisibleProbeCards() {
+  state.probeObserver?.disconnect?.()
+  state.probeObserver = null
+  if (state.preview) return
+  const cards = [...document.querySelectorAll('.server-card[data-server-key]')]
+  if (!cards.length) return
+  if (typeof IntersectionObserver !== 'function') {
+    cards.forEach(card => queueProbeHistory(findServer(card.dataset.serverKey)))
+    return
+  }
+  state.probeObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return
+      queueProbeHistory(findServer(entry.target.dataset.serverKey))
+      state.probeObserver?.unobserve?.(entry.target)
+    })
+  }, { rootMargin: '320px 0px' })
+  cards.forEach(card => {
+    const key = card.dataset.serverKey
+    const server = findServer(key)
+    const status = state.probeHistoryStates.get(key)
+    if (supportsProbeHistory(server) && !['queued', 'loading', 'loaded', 'error'].includes(status)) {
+      state.probeObserver.observe(card)
+    }
+  })
+}
+
 function pruneProbeHistories() {
   const activeKeys = new Set(state.servers.map(server => server._sourceKey))
   for (const key of state.probeHistories.keys()) {
     if (!activeKeys.has(key)) state.probeHistories.delete(key)
   }
+  for (const key of state.probeHistoryStates.keys()) {
+    if (!activeKeys.has(key)) state.probeHistoryStates.delete(key)
+  }
+  state.probeHistoryQueue = state.probeHistoryQueue.filter(server => activeKeys.has(server._sourceKey))
+  state.probeHistoryQueued = new Set(state.probeHistoryQueue.map(server => server._sourceKey))
 }
 
 async function fetchSiteServers(site) {
@@ -1118,8 +1288,9 @@ async function refreshData({ notify = false } = {}) {
       state.probeHistories.clear()
       state.servers.forEach((server, index) => {
         storeProbeSamples(server._sourceKey, previewProbeHistory(server, index))
+        state.probeHistoryStates.set(server._sourceKey, 'loaded')
       })
-      state.siteConfigs = [{ show_price: true, show_expire: true, show_tf: true }]
+      state.siteConfigs = [{ show_price: true, show_expire: true, show_tf: true, long_history_points: 120 }]
       elements.versionText.textContent = 'CF-Server-Monitor Theme · Preview'
       hideError()
       recomputeStats()
@@ -1145,6 +1316,8 @@ async function refreshData({ notify = false } = {}) {
     state.siteConfigs = []
     successful.forEach(result => {
       state.siteConfigs[result.siteIndex] = result.sysConfig
+      const site = state.sites[result.siteIndex]
+      if (site) site.config = { ...site.config, ...result.sysConfig }
     })
     const version = successful.map(result => result.version).find(Boolean)
     elements.versionText.textContent = version ? `CF-Server-Monitor ${version}` : 'CF-Server-Monitor Theme'
@@ -1238,8 +1411,86 @@ function filteredServers() {
   })
 }
 
-// Upstream-style probe block: one live value per enabled line (disabled lines
-// are hidden, none enabled hides the block) plus a request-free session trend.
+function formatProbeTime(value) {
+  return new Date(value).toLocaleString(state.language === 'zh' ? 'zh-CN' : 'en-GB', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+  })
+}
+
+function formatProbeValue(value) {
+  return Number.isFinite(Number(value)) ? `${Math.round(Number(value))} ms` : t('historyNoData')
+}
+
+function renderProbeTimeline(buckets) {
+  return buckets.map((bucket, index) => {
+    const level = bucket.value === null ? 'missing' : (pingLevel(bucket.value) || 'good')
+    const probeValues = PROBE_LINES.flatMap(line => {
+      const value = bucket.probes?.[line.id]
+      return Number.isFinite(Number(value)) ? [`${line.id} ${formatProbeValue(value)}`] : []
+    })
+    const label = [
+      `${formatProbeTime(bucket.start)}–${formatProbeTime(bucket.end)}`,
+      formatProbeValue(bucket.value),
+      ...probeValues
+    ].join(' · ')
+    return `<span class="probe-time-block ${level}" data-probe-bucket="${index}" data-probe-level="${level}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"></span>`
+  }).join('')
+}
+
+function renderProbeTimelineLoading() {
+  return Array.from({ length: PROBE_HISTORY_BUCKETS }, (_, index) => (
+    `<span class="probe-time-block loading" data-probe-bucket="${index}" aria-hidden="true"></span>`
+  )).join('')
+}
+
+function probeHistoryMarkup(server) {
+  if (!supportsProbeHistory(server)) {
+    const spark = pingSparkline(state.probeHistories.get(server._sourceKey) || [])
+    return {
+      label: t(spark ? 'liveTrend' : 'currentSamples'),
+      markup: spark
+        ? `<div class="ping-sparkline" title="${escapeHtml(`${t('latency')} ${Math.round(spark.min)}–${Math.round(spark.max)} ms`)}"><svg viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="${spark.points}"/></svg></div>`
+        : ''
+    }
+  }
+
+  const status = state.probeHistoryStates.get(server._sourceKey) || 'idle'
+  if (status === 'error') {
+    return {
+      label: t('historyUnavailable'),
+      markup: `<div class="probe-history-state">${escapeHtml(t('historyUnavailable'))}</div>`
+    }
+  }
+
+  if (status !== 'loaded') {
+    return {
+      label: t('last24Hours'),
+      markup: `<div class="probe-history" data-probe-source="loading">
+          <div class="probe-history-meta"><span>${escapeHtml(t('historyLatency'))}</span><strong>${escapeHtml(t('historyLoading'))}</strong></div>
+          <div class="probe-timeline" aria-hidden="true">${renderProbeTimelineLoading()}</div>
+        </div>`
+    }
+  }
+
+  const summary = summarizeProbeHistory(state.probeHistories.get(server._sourceKey) || [], {
+    hours: PROBE_HISTORY_HOURS,
+    bucketCount: PROBE_HISTORY_BUCKETS
+  })
+  const average = summary.latency.average
+  const averageLabel = average === null
+    ? t('historyNoData')
+    : t('historyAverage', { value: Math.round(average) })
+  return {
+    label: t('last24Hours'),
+    markup: `<div class="probe-history" data-probe-source="history" data-probe-samples="${summary.latency.sampleCount}">
+        <div class="probe-history-meta"><span>${escapeHtml(t('historyLatency'))}</span><strong>${escapeHtml(averageLabel)}</strong></div>
+        <div class="probe-timeline" role="img" aria-label="${escapeHtml(t('last24Hours'))}">${renderProbeTimeline(summary.latency.buckets)}</div>
+      </div>`
+  }
+}
+
+// Keep the upstream-style live values while adding a single complete 24-hour
+// history strip on backends that advertise the optimized long-history API.
 function probeSectionMarkup(server) {
   const lines = PROBE_LINES
     .map(line => ({ id: line.id, value: server[line.ping] }))
@@ -1250,13 +1501,10 @@ function probeSectionMarkup(server) {
     const level = pingLevel(line.value)
     return `<span class="ping-item"><span class="ping-line">${line.id}</span><b class="ping-value${level ? ` ${level}` : ''}">${escapeHtml(text)}</b></span>`
   }).join('')
-  const spark = pingSparkline(state.probeHistories.get(server._sourceKey) || [])
-  const trend = spark
-    ? `<div class="ping-sparkline" title="${escapeHtml(`${t('latency')} ${Math.round(spark.min)}–${Math.round(spark.max)} ms`)}"><svg viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="${spark.points}"/></svg></div>`
-    : ''
+  const history = probeHistoryMarkup(server)
   return `<section class="probe-section">
-          <div class="probe-heading"><span>${t('pingStats')}</span><small>${t(spark ? 'liveTrend' : 'currentSamples')}</small></div>
-          <div class="ping-list">${items}</div>${trend}
+          <div class="probe-heading"><span>${t('pingStats')}</span><small>${escapeHtml(history.label)}</small></div>
+          <div class="ping-list">${items}</div>${history.markup}
         </section>`
 }
 
@@ -1325,6 +1573,8 @@ function emptyMarkup(hasAnyServers) {
 function renderCards() {
   const servers = filteredServers()
   if (!servers.length) {
+    state.probeObserver?.disconnect?.()
+    state.probeObserver = null
     elements.cardGroups.innerHTML = emptyMarkup(state.servers.length > 0)
     return
   }
@@ -1341,6 +1591,7 @@ function renderCards() {
       ${showGroupTitles ? `<h2 class="group-title">${escapeHtml(name)}<small>${groupServers.length}</small></h2>` : ''}
       <div class="server-grid">${groupServers.map(cardMarkup).join('')}</div>
     </section>`).join('')
+  observeVisibleProbeCards()
 }
 
 function meterMarkup(value) {
@@ -1681,6 +1932,11 @@ async function init() {
 }
 
 function destroy() {
+  state.destroyed = true
+  state.probeObserver?.disconnect?.()
+  state.probeObserver = null
+  state.probeHistoryQueue = []
+  state.probeHistoryQueued.clear()
   closeSockets()
   clearTimeout(state.renderTimer)
   clearInterval(state.refreshTimer)

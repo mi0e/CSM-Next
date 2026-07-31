@@ -23,6 +23,12 @@ test('probe history keeps only valid reported latency and loss metrics', () => {
   }])
 })
 
+test('probe history accepts the common data-array response envelope', () => {
+  assert.deepEqual(normalizeProbeHistory({
+    data: [{ timestamp: now - minute, ping_ct: 42 }]
+  }), [{ timestamp: now - minute, ping_ct: 42 }])
+})
+
 test('probe history summarizes the last hour into chronological real buckets', () => {
   const rows = [
     { timestamp: now - 55 * minute, ping_ct: 40, ping_cu: 60, loss_ct: 0, loss_cu: 10 },
@@ -30,7 +36,7 @@ test('probe history summarizes the last hour into chronological real buckets', (
     { timestamp: now - 20 * minute, ping_ct: 120, ping_cu: 140, loss_ct: 0, loss_cu: 0 },
     { timestamp: now - 5 * minute, ping_ct: 160, ping_cu: 180, loss_ct: 50, loss_cu: 0 }
   ]
-  const summary = summarizeProbeHistory(rows, { now, bucketCount: 4 })
+  const summary = summarizeProbeHistory(rows, { now, hours: 1, bucketCount: 4 })
 
   assert.equal(summary.rowCount, 4)
   assert.equal(summary.latency.average, 110)
@@ -48,12 +54,38 @@ test('probe history merge deduplicates timestamps and drops samples outside the 
   ], [
     { timestamp: now - 10 * minute, ping_ct: 24, loss_cu: 2 },
     { timestamp: now - minute, ping_ct: 30 }
-  ], { now })
+  ], { now, hours: 1 })
 
   assert.deepEqual(rows, [
     { timestamp: now - 10 * minute, ping_ct: 24, loss_ct: 0, loss_cu: 2 },
     { timestamp: now - minute, ping_ct: 30 }
   ])
+})
+
+test('probe history compacts rapid live samples without shrinking the 24-hour window', () => {
+  const rows = mergeProbeHistory([
+    { timestamp: now - 23 * 60 * minute, ping_ct: 40 }
+  ], [
+    { timestamp: now - 15_000, ping_ct: 80 },
+    { timestamp: now - 5_000, ping_ct: 90, ping_cu: 100 }
+  ], { now, hours: 24, bucketMs: minute })
+
+  assert.deepEqual(rows, [
+    { timestamp: now - 23 * 60 * minute, ping_ct: 40 },
+    { timestamp: now - 5_000, ping_ct: 90, ping_cu: 100 }
+  ])
+})
+
+test('probe history builds a complete 24-slot daily timeline', () => {
+  const rows = Array.from({ length: 24 }, (_, index) => ({
+    timestamp: now - (23.5 - index) * 60 * minute,
+    ping_ct: 40 + index
+  }))
+  const summary = summarizeProbeHistory(rows, { now, hours: 24, bucketCount: 24 })
+
+  assert.equal(summary.rowCount, 24)
+  assert.equal(summary.latency.buckets.length, 24)
+  assert.ok(summary.latency.buckets.every(bucket => bucket.sampleCount === 1))
 })
 
 const { pingSparkline } = await import('../src/assets/js/shared/probe-history.js')
