@@ -62,3 +62,18 @@ test('both view templates use locally inlined Lucide icons and no CDN assets', a
   }
   assert.doesNotMatch(home, /jsdelivr|unpkg|cdnjs/)
 })
+
+test('history timeline uses 24 equal grid tracks without clipped edge blocks', async () => {
+  const css = await readFile(resolve(root, 'src/assets/css/main.css'), 'utf8')
+  const timeline = css.match(/\.probe-timeline\s*\{([^}]+)\}/)?.[1] || ''
+  const block = css.match(/\.probe-time-block\s*\{([^}]+)\}/)?.[1] || ''
+
+  assert.match(timeline, /display:\s*grid/)
+  assert.match(timeline, /grid-template-columns:\s*repeat\(24,\s*minmax\(0,\s*1fr\)\)/)
+  assert.match(timeline, /padding:\s*0/)
+  assert.match(timeline, /overflow:\s*visible/)
+  assert.match(block, /width:\s*100%/)
+  assert.match(block, /height:\s*14px/)
+  assert.match(block, /box-sizing:\s*border-box/)
+  assert.match(block, /margin:\s*0/)
+})

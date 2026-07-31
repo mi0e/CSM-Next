@@ -114,7 +114,11 @@ const json = value => new Response(JSON.stringify(value), {
 })
 globalThis.fetch = async input => {
   const url = String(input)
-  if (url === 'https://upstream.example/api/config') return json({ turnstile_enabled: false, site_title: 'History Test' })
+  if (url === 'https://upstream.example/api/config') return json({
+    turnstile_enabled: false,
+    site_title: 'History Test',
+    long_history_points: 120
+  })
   if (url === 'https://upstream.example/api/servers') return json({
     servers: [{
       id: 'node-1', name: 'Node One', region: 'HK', server_group: 'Default', os: 'Debian', arch: 'amd64',
@@ -123,14 +127,14 @@ globalThis.fetch = async input => {
       loss_ct: 0, loss_cu: 0, loss_cm: 0, loss_bd: 0,
       last_updated: now, report_timestamp: now
     }],
-    sysConfig: {}
+    sysConfig: { long_history_points: 120 }
   })
-  if (url === 'https://upstream.example/api/history/all?id=node-1&hours=1') {
+  if (url === 'https://upstream.example/api/history/all?id=node-1&hours=24') {
     historyFetches += 1
     return json({ rows: [
-      { timestamp: now - 50 * 60_000, ping_ct: 40, ping_cu: 50, ping_cm: 60, ping_bd: 70, loss_ct: 0, loss_cu: 0, loss_cm: 5, loss_bd: 0 },
-      { timestamp: now - 25 * 60_000, ping_ct: 80, ping_cu: 90, ping_cm: 100, ping_bd: 110, loss_ct: 10, loss_cu: 0, loss_cm: 0, loss_bd: 0 },
-      { timestamp: now - 5 * 60_000, ping_ct: 120, ping_cu: 130, ping_cm: 140, ping_bd: 150, loss_ct: 0, loss_cu: 20, loss_cm: 0, loss_bd: 0 }
+      { timestamp: now - 23.5 * 3600_000, ping_ct: 40, ping_cu: 50, ping_cm: 60, ping_bd: 70 },
+      { timestamp: now - 12.5 * 3600_000, ping_ct: 110, ping_cu: 120, ping_cm: 130, ping_bd: 140 },
+      { timestamp: now - 1.5 * 3600_000, ping_ct: 220, ping_cu: 230, ping_cm: 240, ping_bd: 250 }
     ] })
   }
   throw new Error(`Unexpected fetch: ${url}`)
@@ -142,12 +146,17 @@ await mount({ name: 'dashboard' })
 await new Promise(resolve => realSetTimeout(resolve, 240))
 
 const cards = nodeFor('#cardGroups').innerHTML
-if (historyFetches !== 0) throw new Error(`Probe block must not request history, received ${historyFetches} calls`)
+if (historyFetches !== 1) throw new Error(`Expected one visible-card history request, received ${historyFetches}`)
 if (!cards.includes('>CT<') || !cards.includes('45 ms')) throw new Error('Live probe values did not render')
 if (!cards.includes('ping-value warn') || !cards.includes('155 ms')) throw new Error('Warn-level latency color did not render')
 if (cards.includes('>BD<')) throw new Error('Disabled probe line must be hidden')
-if (!cards.includes('实时采样')) throw new Error('Pre-trend label did not render')
-if (cards.includes('ping-sparkline')) throw new Error('Sparkline must wait for at least two session samples')
+if (!cards.includes('过去 24 小时')) throw new Error('24-hour history label did not render')
+if (!cards.includes('data-probe-source="history"')) throw new Error('Complete history did not replace the loading state')
+if ((cards.match(/data-probe-bucket=/g) || []).length !== 24) throw new Error('Expected exactly 24 history blocks')
+if (!cards.includes('probe-time-block good') || !cards.includes('probe-time-block warn') || !cards.includes('probe-time-block bad')) {
+  throw new Error('Latency threshold colors did not render across the timeline')
+}
+if (cards.includes('ping-sparkline')) throw new Error('Optimized history should replace the session sparkline')
 
 const socket = sockets.find(item => item.url.includes('/api/ws'))
 if (!socket) throw new Error('Dashboard did not open a WebSocket')
@@ -168,11 +177,9 @@ socket.emit('message', {
 await new Promise(resolve => realSetTimeout(resolve, 160))
 
 const updated = nodeFor('#cardGroups').innerHTML
-if (historyFetches !== 0) throw new Error(`WebSocket samples must not trigger history requests, received ${historyFetches}`)
+if (historyFetches !== 1) throw new Error(`WebSocket samples must not trigger another history request, received ${historyFetches}`)
 if (!updated.includes('90 ms')) throw new Error('WebSocket sample did not refresh live probe values')
-if (!updated.includes('ping-sparkline') || !updated.includes('<polyline points=')) {
-  throw new Error('Session sparkline did not render from WebSocket samples')
-}
-if (!updated.includes('实时趋势')) throw new Error('Trend label did not render')
+if ((updated.match(/data-probe-bucket=/g) || []).length !== 24) throw new Error('WebSocket update changed the fixed block count')
+if (!updated.includes('data-probe-source="history"')) throw new Error('WebSocket update dropped the loaded history')
 
-console.log('Dashboard probe smoke test passed: request-free live values plus a WebSocket-fed session trend.')
+console.log('Dashboard history smoke test passed: one complete 24-hour load plus WebSocket-only updates.')
