@@ -1,5 +1,17 @@
 # Third-party notices
 
+## COBE 2.0.1
+
+The optional server globe uses the unchanged ESM distribution of
+[COBE](https://github.com/shuding/cobe), vendored locally under
+`src/assets/vendor/cobe-2.0.1/`. COBE includes an embedded world-map texture
+and is used under the MIT License. The complete license is preserved beside
+the vendored bundle in `src/assets/vendor/cobe-2.0.1/LICENSE`.
+
+Copyright (c) 2021 Shu Ding
+
+---
+
 ## Lucide Icons
 
 The inline interface icons marked with `data-lucide` are sourced from

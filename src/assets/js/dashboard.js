@@ -62,6 +62,7 @@ const translations = {
     themeGroupBackground: '背景图片', themeGroupEffects: '界面效果', themeGroupAdvanced: '高级',
     themeBackground: '图片地址', themeBackgroundHint: '仅允许 HTTPS 图片地址；留空表示不使用背景图。跨域图片可能需要站长在上游后台 CSP 名单放行。',
     themeTransparency: '界面透明化', themeTransparencyHint: '独立控制卡片和顶部栏的透明效果。',
+    themeGlobe: '服务器地球仪', themeGlobeHint: '在首页概览旁显示交互式地球仪，并将五张卡片整理为紧凑布局。',
     themeTransparencyMode: '透明方案',
     themeTransparencySoft: '柔和透明', themeTransparencySoftHint: '仅透明，不模糊后方内容。',
     themeTransparencyGlass: '毛玻璃', themeTransparencyGlassHint: '透明并模糊后方内容。',
@@ -160,6 +161,7 @@ const translations = {
     themeGroupBackground: 'Background', themeGroupEffects: 'Interface effects', themeGroupAdvanced: 'Advanced',
     themeBackground: 'Image URL', themeBackgroundHint: 'HTTPS image URLs only. Leave empty for no background. Cross-origin images may need a CSP allowlist entry in the upstream admin.',
     themeTransparency: 'Interface transparency', themeTransparencyHint: 'Controls transparency for cards and the top bar independently.',
+    themeGlobe: 'Server globe', themeGlobeHint: 'Shows an interactive globe beside the overview and arranges all five cards in a compact layout.',
     themeTransparencyMode: 'Transparency style',
     themeTransparencySoft: 'Soft', themeTransparencySoftHint: 'Transparent without blurring content behind it.',
     themeTransparencyGlass: 'Glass', themeTransparencyGlassHint: 'Transparent with background blur.',
@@ -263,7 +265,9 @@ function createState() {
     preview: new URLSearchParams(location.search).get('preview') === '1',
     renderTimer: null,
     refreshTimer: null,
-    clockTimer: null,
+    onlineTimer: null,
+    globe: null,
+    globeGeneration: 0,
     loginSiteIndex: 0,
     loginBusy: false,
     loginTurnstileWidgetId: null,
@@ -291,8 +295,12 @@ const queryElements = () => ({
   themeButton: document.querySelector('#themeButton'),
   languageButton: document.querySelector('#languageButton'),
   authButton: document.querySelector('#authButton'),
+  overviewShell: document.querySelector('.overview-shell'),
+  currentTimeCard: document.querySelector('#currentTimeCard'),
   currentTime: document.querySelector('#currentTime'),
   currentDate: document.querySelector('#currentDate'),
+  serverGlobe: document.querySelector('#serverGlobe'),
+  globeCanvas: document.querySelector('#serverGlobe canvas'),
   onlineCount: document.querySelector('#onlineCount'),
   totalCount: document.querySelector('#totalCount'),
   offlineCount: document.querySelector('#offlineCount'),
@@ -339,6 +347,7 @@ const queryElements = () => ({
   themeSettingsFields: document.querySelector('#themeSettingsFields'),
   themeBackgroundImage: document.querySelector('#themeBackgroundImage'),
   themeTransparencyEnabled: document.querySelector('#themeTransparencyEnabled'),
+  themeGlobeEnabled: document.querySelector('#themeGlobeEnabled'),
   themeTransparencyOptions: document.querySelector('#themeTransparencyOptions'),
   themeTransparencySoft: document.querySelector('#themeTransparencySoft'),
   themeTransparencyGlass: document.querySelector('#themeTransparencyGlass'),
@@ -500,6 +509,7 @@ function showToast(message) {
 function applyTheme() {
   document.documentElement.dataset.theme = state.theme
   elements.themeColor?.setAttribute('content', state.theme === 'dark' ? '#101216' : '#f8f9fb')
+  state.globe?.update({ theme: state.theme })
 }
 
 /**
@@ -544,6 +554,7 @@ function applyTranslations() {
     node.setAttribute('aria-label', text)
   })
   updateAuthButton()
+  state.globe?.update({ language: state.language })
   if (elements.loginModal && !elements.loginModal.hidden) updateLoginModalState({ refreshTurnstile: false })
 }
 
@@ -789,6 +800,7 @@ function updateThemeTransparencyControls({ initializeIntensity = false } = {}) {
 function populateThemeSettingsForm() {
   if (!elements.themeSettingsForm) return
   elements.themeBackgroundImage.value = state.themeSettings.backgroundImage || ''
+  elements.themeGlobeEnabled.checked = Boolean(state.themeSettings.globeEnabled)
   elements.themeTransparencyEnabled.checked = Boolean(state.themeSettings.transparencyEnabled)
   elements.themeTransparencyGlass.checked = state.themeSettings.transparencyMode === 'glass'
   elements.themeTransparencySoft.checked = !elements.themeTransparencyGlass.checked
@@ -835,6 +847,7 @@ function themeSettingsFromForm() {
   const transparencyIntensity = clamp(elements.themeTransparencyIntensity.value, 0, 80)
   return {
     backgroundImage: elements.themeBackgroundImage.value.trim(),
+    globeEnabled: Boolean(elements.themeGlobeEnabled.checked),
     transparencyEnabled: Boolean(elements.themeTransparencyEnabled.checked),
     transparencyMode: elements.themeTransparencyGlass.checked ? 'glass' : 'soft',
     panelOpacity: Number((1 - transparencyIntensity / 100).toFixed(2)),
@@ -861,6 +874,7 @@ function submitThemeSettings(event) {
     state.themeSettings = saveThemeSettings(themeSettingsFromForm())
     state.themeSettingsLoaded = true
     applyThemeAppearance(state.themeSettings)
+    syncOverviewMode()
     populateThemeSettingsForm()
     showToast(t('themeSaved'))
   } catch (error) {
@@ -877,6 +891,7 @@ function restoreThemeDefaults() {
   state.themeSettings = loadThemeSettings(themeSettingsFallback())
   state.themeSettingsLoaded = true
   applyThemeAppearance(state.themeSettings)
+  syncOverviewMode()
   populateThemeSettingsForm()
   showToast(t('themeRestored'))
 }
@@ -904,6 +919,7 @@ function loadPersistedThemeSettings() {
   state.themeSettings = loadThemeSettings(themeSettingsFallback())
   state.themeSettingsLoaded = true
   applyThemeAppearance(state.themeSettings)
+  syncOverviewMode()
   populateThemeSettingsForm()
 }
 
@@ -1417,6 +1433,44 @@ function formatProbeTime(value) {
   })
 }
 
+function updateGlobe() {
+  state.globe?.update({
+    servers: state.servers,
+    activeRegion: state.filter,
+    language: state.language,
+    theme: state.theme
+  })
+}
+
+async function syncOverviewMode() {
+  const enabled = Boolean(state.themeSettings.globeEnabled)
+  const generation = ++state.globeGeneration
+  elements.overviewShell?.classList?.toggle('is-globe-enabled', enabled)
+  if (!enabled) {
+    state.globe?.destroy()
+    state.globe = null
+    if (elements.serverGlobe) elements.serverGlobe.hidden = true
+    return
+  }
+  if (elements.serverGlobe) elements.serverGlobe.hidden = false
+  if (state.globe) {
+    updateGlobe()
+    return
+  }
+  try {
+    const { mountServerGlobe } = await import('./shared/globe.js')
+    if (generation !== state.globeGeneration || !state.themeSettings.globeEnabled || state.destroyed) return
+    state.globe = mountServerGlobe({
+      root: elements.serverGlobe,
+      canvas: elements.globeCanvas,
+      onCountrySelect: selectGlobeCountry
+    })
+    updateGlobe()
+  } catch (error) {
+    console.error('[theme] globe unavailable', error)
+  }
+}
+
 function formatProbeValue(value) {
   return Number.isFinite(Number(value)) ? `${Math.round(Number(value))} ms` : t('historyNoData')
 }
@@ -1644,6 +1698,7 @@ function renderAll() {
   renderTable()
   renderViews()
   updateClock()
+  updateGlobe()
 }
 
 function showError(error) {
@@ -1852,6 +1907,7 @@ function bindEvents() {
     renderFilters()
     renderCards()
     renderTable()
+    updateGlobe()
   })
   document.querySelector('.view-switch').addEventListener('click', event => {
     const button = event.target.closest('[data-view]')
@@ -1893,16 +1949,24 @@ function bindEvents() {
   addGlobalListener(window, 'beforeunload', closeSockets)
 }
 
+function selectGlobeCountry(code) {
+  state.filter = code
+  renderFilters()
+  renderCards()
+  renderTable()
+  updateGlobe()
+}
+
 async function init() {
   renderThemeSettingGroups()
   bindEvents()
   applyTheme()
   applyTranslations()
-  updateClock()
   updateConnectionState('polling')
   state.config = await loadRuntimeConfig()
   applyConfig()
   loadPersistedThemeSettings()
+  updateClock()
 
   try {
     if (state.preview) {
@@ -1924,10 +1988,11 @@ async function init() {
 
   const refreshInterval = Math.max(15000, Number(state.config.refreshInterval) || DEFAULT_REFRESH_INTERVAL)
   state.refreshTimer = setInterval(() => refreshData(), refreshInterval)
-  state.clockTimer = setInterval(() => {
+  state.onlineTimer = setInterval(() => {
     updateClock()
     recomputeStats()
     renderOverview()
+    updateGlobe()
   }, 1000)
 }
 
@@ -1940,7 +2005,10 @@ function destroy() {
   closeSockets()
   clearTimeout(state.renderTimer)
   clearInterval(state.refreshTimer)
-  clearInterval(state.clockTimer)
+  clearInterval(state.onlineTimer)
+  state.globe?.destroy()
+  state.globe = null
+  state.globeGeneration += 1
   clearTimeout(showToast.timer)
   destroyLoginTurnstile()
   document.body.classList.remove('theme-drawer-open')

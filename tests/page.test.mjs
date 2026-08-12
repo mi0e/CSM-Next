@@ -41,6 +41,7 @@ test('toolbar keeps theme customization before authorization and drawer stays lo
   assert.ok(settingsIndex > 0 && authIndex > settingsIndex)
   assert.match(home, /id="themeDrawer"/)
   assert.match(home, /id="themeTransparencyEnabled"[^>]+type="checkbox"/)
+  assert.match(home, /id="themeGlobeEnabled"[^>]+type="checkbox"[^>]+role="switch"/)
   assert.match(home, /id="themeTransparencySoft"[^>]+type="radio"/)
   assert.match(home, /id="themeTransparencyGlass"[^>]+type="radio"/)
   assert.match(home, /id="themeTransparencyIntensity"[^>]+type="range"/)
@@ -61,6 +62,58 @@ test('both view templates use locally inlined Lucide icons and no CDN assets', a
     assert.match(home, new RegExp(`data-lucide="${name}"`))
   }
   assert.doesNotMatch(home, /jsdelivr|unpkg|cdnjs/)
+})
+
+test('overview defaults to five cards and keeps the optional globe outside the two list views', async () => {
+  const home = await readHome()
+  const overview = home.match(/<section class="overview-shell"[\s\S]+?<section class="dashboard-controls"/)?.[0] || ''
+  assert.equal((overview.match(/<article(?: id="currentTimeCard")? class="overview-card/g) || []).length, 5)
+  assert.match(overview, /id="currentTimeCard"/)
+  assert.match(overview, /id="currentTime"/)
+  assert.match(overview, /id="serverGlobe"[^>]+hidden/)
+  assert.match(overview, /<canvas class="globe-canvas"[^>]+tabindex="0"/)
+  assert.match(overview, /currentDate|当前时间/)
+
+  const gridIndex = home.indexOf('id="gridView"')
+  const tableIndex = home.indexOf('id="tableView"')
+  const globeIndex = home.indexOf('id="serverGlobe"')
+  assert.ok(globeIndex > 0 && globeIndex < gridIndex && globeIndex < tableIndex)
+  assert.equal((home.match(/class="view-button/g) || []).length, 2)
+  assert.deepEqual([...home.matchAll(/class="view-button[^>]+data-view="([^"]+)"/g)].map(match => match[1]), ['grid', 'table'])
+})
+
+test('dashboard globe synchronization is reachable from renderAll and filter paths', async () => {
+  const dashboard = await readFile(resolve(root, 'src/assets/js/dashboard.js'), 'utf8')
+  const renderAll = dashboard.match(/function renderAll\(\)\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+  const timeline = dashboard.match(/function renderProbeTimeline\(buckets\)\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+  assert.match(renderAll, /updateGlobe\(\)/)
+  assert.doesNotMatch(timeline, /globe|updateGlobe/)
+  assert.ok((dashboard.match(/updateGlobe\(\)/g) || []).length >= 4)
+})
+
+test('COBE is pinned and vendored locally with its license', async () => {
+  const globe = await readFile(resolve(root, 'src/assets/js/shared/globe.js'), 'utf8')
+  const bundle = await readFile(resolve(root, 'src/assets/vendor/cobe-2.0.1/index.esm.js'), 'utf8')
+  const license = await readFile(resolve(root, 'src/assets/vendor/cobe-2.0.1/LICENSE'), 'utf8')
+  assert.match(globe, /vendor\/cobe-2\.0\.1\/index\.esm\.js/)
+  assert.match(bundle, /data:image\/png;base64/)
+  assert.match(license, /MIT License/)
+  assert.doesNotMatch(globe, /from ['"]cobe['"]/)
+  assert.match(globe, /catch\s*\{[\s\S]*?restoreCobeCanvas\(canvas, originalParent, originalNextSibling\)[\s\S]*?mountFallback/)
+})
+
+test('enabled overview uses a consistent two-column by three-row card grid', async () => {
+  const css = await readFile(resolve(root, 'src/assets/css/main.css'), 'utf8')
+  const base = css.slice(css.indexOf('.overview-shell.is-globe-enabled .overview-grid'), css.indexOf('.overview-shell:not(.is-globe-enabled)'))
+  const at840 = css.slice(css.indexOf('@media (max-width: 840px)'), css.indexOf('@media (max-width: 560px)'))
+  const at560 = css.slice(css.indexOf('@media (max-width: 560px)'))
+  assert.match(base, /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/)
+  assert.match(base, /grid-template-rows:\s*repeat\(3,\s*minmax\(110px,\s*1fr\)\)/)
+  assert.match(at560, /\.overview-shell\.is-globe-enabled \.overview-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,[^}]*grid-template-rows:\s*repeat\(3,\s*minmax\(102px,\s*auto\)\)/)
+  assert.doesNotMatch(css, /\.overview-shell\.is-globe-enabled #currentTimeCard/)
+  assert.doesNotMatch(css, /\.overview-shell\.is-globe-enabled \.overview-grid > \.overview-card:not\(#currentTimeCard\)/)
+  assert.match(at840, /\.overview-shell:not\(\.is-globe-enabled\) #currentTimeCard\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/)
+  assert.match(at560, /\.overview-shell:not\(\.is-globe-enabled\) #currentTimeCard\s*\{[^}]*grid-column:\s*auto/)
 })
 
 test('history timeline uses 24 equal grid tracks without clipped edge blocks', async () => {

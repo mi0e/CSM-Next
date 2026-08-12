@@ -130,6 +130,10 @@ if (document.documentElement.dataset.theme !== 'dark') throw new Error('Theme to
 
 nodeFor('#themeSettingsButton').dispatch('click')
 if (!nodeFor('#themeDrawer').classList.values.has('is-open')) throw new Error('Theme settings drawer did not open')
+if (!nodeFor('#serverGlobe').hidden || nodeFor('.overview-shell').classList.values.has('is-globe-enabled')) {
+  throw new Error('Globe must be disabled by default')
+}
+nodeFor('#themeGlobeEnabled').checked = true
 nodeFor('#themeTransparencyEnabled').checked = true
 nodeFor('#themeTransparencyEnabled').dispatch('change')
 if (nodeFor('#themeTransparencyOptions').hidden) throw new Error('Transparency options did not open')
@@ -145,9 +149,19 @@ if (nodeFor('#themeBlurOutput').textContent !== '22px') throw new Error('Theme b
 nodeFor('#themeCustomCss').value = '.brand-title { letter-spacing: .08em; }'
 nodeFor('#themeSettingsForm').dispatch('submit')
 await new Promise(resolvePromise => realSetTimeout(resolvePromise, 20))
+if (nodeFor('#serverGlobe').hidden || !nodeFor('.overview-shell').classList.values.has('is-globe-enabled')) {
+  throw new Error('Saved globe setting did not enable the overview globe')
+}
+if (nodeFor('#currentTimeCard').hidden) throw new Error('Globe mode must retain the current-time card')
+if (!/^\d{2}:\d{2}:\d{2}$/.test(nodeFor('#currentTime').textContent)) throw new Error('Current time was not rendered')
 if (document.documentElement.style['--panel-opacity'] !== '60%') throw new Error('Theme opacity was not applied')
 if (document.documentElement.style['--panel-blur'] !== '22px') throw new Error('Theme glass blur was not applied')
 if (!nodeFor('#themeCustomStyle').textContent.includes('letter-spacing')) throw new Error('Custom CSS was not applied safely')
+nodeFor('#themeSettingsReset').dispatch('click')
+await new Promise(resolvePromise => realSetTimeout(resolvePromise, 20))
+if (!nodeFor('#serverGlobe').hidden || nodeFor('.overview-shell').classList.values.has('is-globe-enabled')) {
+  throw new Error('Restoring defaults did not disable the globe')
+}
 
 nodeFor('.view-switch').dispatch('click', { target: { closest: () => ({ dataset: { view: 'table' } }) } })
 if (nodeFor('#tableView').hidden || !nodeFor('#gridView').hidden) throw new Error('Table view toggle failed')

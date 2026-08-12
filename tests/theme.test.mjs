@@ -17,7 +17,7 @@ function fakeStorage(initial = {}) {
 }
 
 test('visitor settings in localStorage take precedence over site defaults', () => {
-  const scope = { __CSM_THEME__: { transparencyEnabled: true, transparencyMode: 'glass', panelOpacity: 0.7, panelBlur: 20, customCss: '' } }
+  const scope = { __CSM_THEME__: { globeEnabled: true, transparencyEnabled: true, transparencyMode: 'glass', panelOpacity: 0.7, panelBlur: 20, customCss: '' } }
   const storage = fakeStorage({
     [THEME_SETTINGS_STORAGE_KEY]: JSON.stringify({ panelOpacity: 0.5, transparencyEnabled: true, transparencyMode: 'soft', panelBlur: 10, customCss: '' })
   })
@@ -25,15 +25,17 @@ test('visitor settings in localStorage take precedence over site defaults', () =
   assert.equal(settings.storage, 'local')
   assert.equal(settings.panelOpacity, 0.5)
   assert.equal(settings.transparencyMode, 'soft')
+  assert.equal(settings.globeEnabled, true)
 })
 
 test('site defaults from window.__CSM_THEME__ apply when no local override exists', () => {
-  const scope = { __CSM_THEME__: { backgroundImage: 'https://cdn.example.com/bg.webp', transparencyEnabled: true, transparencyMode: 'glass', panelOpacity: 0.8, panelBlur: 16, customCss: '.a{color:red}' } }
+  const scope = { __CSM_THEME__: { backgroundImage: 'https://cdn.example.com/bg.webp', globeEnabled: true, transparencyEnabled: true, transparencyMode: 'glass', panelOpacity: 0.8, panelBlur: 16, customCss: '.a{color:red}' } }
   const settings = loadThemeSettings({}, { storage: fakeStorage(), scope })
   assert.equal(settings.storage, 'site')
   assert.equal(settings.backgroundImage, 'https://cdn.example.com/bg.webp')
   assert.equal(settings.panelOpacity, 0.8)
   assert.equal(settings.customCss, '.a{color:red}')
+  assert.equal(settings.globeEnabled, true)
 })
 
 test('malformed injected globals and storage fall back to defaults', () => {
@@ -48,11 +50,12 @@ test('malformed injected globals and storage fall back to defaults', () => {
 test('save validates, persists and clear restores site defaults', () => {
   const storage = fakeStorage()
   const saved = saveThemeSettings({
-    backgroundImage: '', transparencyEnabled: true, transparencyMode: 'glass',
+    backgroundImage: '', globeEnabled: true, transparencyEnabled: true, transparencyMode: 'glass',
     panelOpacity: 0.6, panelBlur: 24, customCss: ''
   }, { storage })
   assert.equal(saved.storage, 'local')
   assert.ok(storage.dump()[THEME_SETTINGS_STORAGE_KEY].includes('"panelOpacity":0.6'))
+  assert.ok(storage.dump()[THEME_SETTINGS_STORAGE_KEY].includes('"globeEnabled":true'))
 
   assert.throws(() => saveThemeSettings({ panelOpacity: 42 }, { storage }), /opacity/i)
 
@@ -65,12 +68,13 @@ test('save validates, persists and clear restores site defaults', () => {
 
 test('export snippet is paste-ready for the upstream custom-script box', () => {
   const snippet = exportSiteThemeSnippet({
-    backgroundImage: 'https://cdn.example.com/bg.webp', transparencyEnabled: true,
+    backgroundImage: 'https://cdn.example.com/bg.webp', globeEnabled: false, transparencyEnabled: true,
     transparencyMode: 'glass', panelOpacity: 0.75, panelBlur: 18, customCss: ''
   })
   assert.ok(snippet.startsWith('window.__CSM_THEME__ = {'))
   assert.ok(snippet.endsWith('};'))
   assert.ok(snippet.includes('"backgroundImage":"https://cdn.example.com/bg.webp"'))
+  assert.ok(snippet.includes('"globeEnabled":false'))
   assert.ok(!snippet.includes('customCss'))
   assert.throws(() => exportSiteThemeSnippet({ panelOpacity: 42 }), /opacity/i)
 })

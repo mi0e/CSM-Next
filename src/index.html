@@ -58,17 +58,9 @@
           </div>
         </section>
 
-        <section class="overview-grid" aria-label="全局统计">
-          <article class="overview-card">
-            <div class="overview-label">
-              <span data-i18n="currentTime">当前时间</span>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>
-            </div>
-            <strong id="currentTime">--:--:--</strong>
-            <small id="currentDate">----</small>
-          </article>
-
-          <article class="overview-card">
+        <section class="overview-shell" aria-label="全局统计">
+          <div class="overview-grid">
+            <article class="overview-card">
             <div class="overview-label">
               <span data-i18n="currentOnline">当前在线</span>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>
@@ -102,7 +94,33 @@
             </div>
             <strong class="overview-line"><b class="up">↑</b><span id="speedUp">-</span></strong>
             <strong class="overview-line"><b class="down">↓</b><span id="speedDown">-</span></strong>
-          </article>
+            </article>
+
+            <article id="currentTimeCard" class="overview-card">
+              <div class="overview-label">
+                <span data-i18n="currentTime">当前时间</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>
+              </div>
+              <strong id="currentTime">--:--:--</strong>
+              <small id="currentDate">----</small>
+            </article>
+          </div>
+
+          <section id="serverGlobe" class="globe-panel" aria-labelledby="globeTitle" hidden>
+            <div class="globe-panel-heading">
+              <div>
+                <h2 id="globeTitle" data-globe-title>服务器地球仪</h2>
+                <p data-globe-status aria-live="polite">0 个国家/地区 · 0/0 在线</p>
+              </div>
+              <div class="globe-controls" aria-label="地球仪控制">
+                <button type="button" data-globe-action="zoom-out" aria-label="缩小" title="缩小">−</button>
+                <button type="button" data-globe-action="reset" aria-label="重置地球仪视角" title="重置地球仪视角">↺</button>
+                <button type="button" data-globe-action="zoom-in" aria-label="放大" title="放大">+</button>
+              </div>
+            </div>
+            <canvas class="globe-canvas" tabindex="0" role="img" aria-label="交互式服务器分布地球仪"></canvas>
+            <p class="globe-help" data-globe-help>拖动旋转；滚轮、+/− 或按钮缩放。国家位置仅为代表点，并非服务器所在城市。</p>
+          </section>
         </section>
 
         <section class="dashboard-controls" aria-label="筛选与视图">
@@ -214,6 +232,15 @@
                   <small data-i18n="themeTransparencyHint">独立控制卡片和顶部栏的透明效果。</small>
                 </span>
                 <input id="themeTransparencyEnabled" type="checkbox" role="switch">
+                <i aria-hidden="true"></i>
+              </label>
+
+              <label class="theme-settings-toggle" for="themeGlobeEnabled">
+                <span>
+                  <b data-i18n="themeGlobe">服务器地球仪</b>
+                  <small data-i18n="themeGlobeHint">在首页概览旁显示交互式地球仪，并将五张卡片整理为紧凑布局。</small>
+                </span>
+                <input id="themeGlobeEnabled" type="checkbox" role="switch">
                 <i aria-hidden="true"></i>
               </label>
 
