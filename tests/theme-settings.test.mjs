@@ -9,6 +9,7 @@ import { applyThemeAppearance } from '../src/assets/js/shared/theme.js'
 test('theme settings normalize safe values and clamp stored opacity', () => {
   assert.deepEqual(normalizeThemeSettings({
     backgroundImage: 'https://cdn.example.com/bg.webp',
+    globeEnabled: true,
     transparencyEnabled: true,
     transparencyMode: 'soft',
     panelOpacity: 0.72,
@@ -16,6 +17,7 @@ test('theme settings normalize safe values and clamp stored opacity', () => {
     customCss: '.brand-title { letter-spacing: .1em; }'
   }), {
     backgroundImage: 'https://cdn.example.com/bg.webp',
+    globeEnabled: true,
     transparencyEnabled: true,
     transparencyMode: 'soft',
     panelOpacity: 0.72,
@@ -30,6 +32,14 @@ test('legacy opacity settings migrate to the existing glass appearance', () => {
   assert.equal(settings.transparencyEnabled, true)
   assert.equal(settings.transparencyMode, 'glass')
   assert.equal(settings.panelBlur, 18)
+  assert.equal(settings.globeEnabled, false)
+})
+
+test('globe setting is strict boolean and inherits fallback', () => {
+  assert.equal(normalizeThemeSettings({}).globeEnabled, false)
+  assert.equal(normalizeThemeSettings({}, { globeEnabled: true }).globeEnabled, true)
+  assert.equal(normalizeThemeSettings({ globeEnabled: false }, { globeEnabled: true }).globeEnabled, false)
+  assert.throws(() => validateThemeSettings({ backgroundImage: '', globeEnabled: 'yes', panelOpacity: 1, customCss: '' }), error => error.code === 'invalid_globe_enabled' && error.field === 'globeEnabled')
 })
 
 test('theme appearance separates transparency from backdrop blur', () => {

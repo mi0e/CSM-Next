@@ -1,5 +1,6 @@
 export const THEME_SETTINGS_DEFAULTS = Object.freeze({
   backgroundImage: '',
+  globeEnabled: false,
   transparencyEnabled: false,
   transparencyMode: 'soft',
   panelOpacity: 1,
@@ -73,8 +74,15 @@ export function normalizeThemeSettings(value = {}, fallback = {}) {
   const panelBlur = Number.isFinite(parsedBlur)
     ? Math.min(THEME_BLUR_MAX, Math.max(THEME_BLUR_MIN, parsedBlur))
     : fallbackBlur
+  const fallbackGlobeEnabled = typeof fallback?.globeEnabled === 'boolean'
+    ? fallback.globeEnabled
+    : THEME_SETTINGS_DEFAULTS.globeEnabled
+  const globeEnabled = typeof value?.globeEnabled === 'boolean'
+    ? value.globeEnabled
+    : fallbackGlobeEnabled
   return {
     backgroundImage,
+    globeEnabled,
     transparencyEnabled,
     transparencyMode,
     panelOpacity,
@@ -110,6 +118,13 @@ export function validateThemeSettings(value) {
     throw error
   }
 
+  if (Object.hasOwn(value, 'globeEnabled') && typeof value.globeEnabled !== 'boolean') {
+    const error = new Error('Globe enabled must be a boolean')
+    error.code = 'invalid_globe_enabled'
+    error.field = 'globeEnabled'
+    throw error
+  }
+
   if (Object.hasOwn(value, 'transparencyMode') && !transparencyModes.has(value.transparencyMode)) {
     const error = new Error(`Transparency mode must be one of: ${THEME_TRANSPARENCY_MODES.join(', ')}`)
     error.code = 'invalid_transparency_mode'
@@ -139,6 +154,7 @@ export function validateThemeSettings(value) {
   const normalized = normalizeThemeSettings(value)
   return {
     backgroundImage: backgroundImage ? safeThemeBackground(backgroundImage) : '',
+    globeEnabled: normalized.globeEnabled,
     transparencyEnabled: normalized.transparencyEnabled,
     transparencyMode: normalized.transparencyMode,
     panelOpacity,
