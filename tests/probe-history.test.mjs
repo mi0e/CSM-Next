@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
-  mergeProbeHistory, normalizeProbeHistory, summarizeProbeHistory
+  mergeProbeHistory, normalizeProbeHistory, normalizeProbeWindow, summarizeProbeHistory
 } from '../src/assets/js/shared/probe-history.js'
 
 const now = 1_700_000_000_000
@@ -12,7 +12,7 @@ test('probe history keeps only valid reported latency and loss metrics', () => {
   const rows = normalizeProbeHistory({ rows: [{
     timestamp: now - minute,
     ping_ct: '42', ping_cu: '', ping_cm: -1,
-    loss_ct: '2.5', loss_cu: 0, loss_cm: 120
+    loss_ct: '2.5', loss_cu: 0, loss_cm: 120, loss_bd: false
   }] })
 
   assert.deepEqual(rows, [{
@@ -21,6 +21,22 @@ test('probe history keeps only valid reported latency and loss metrics', () => {
     loss_ct: 2.5,
     loss_cu: 0
   }])
+})
+
+test('probe history converts the compact upstream ping and loss windows', () => {
+  assert.deepEqual(normalizeProbeWindow({
+    ping: [
+      { ts: now - 2 * minute, ct: 42, cu: '55', cm: null, bd: false },
+      { ts: now - minute, ct: 48, cm: 61 }
+    ],
+    loss: [
+      { ts: now - 2 * minute, ct: 0, cu: 2, cm: 100, bd: false },
+      { ts: now - minute, ct: 1, cm: 3 }
+    ]
+  }), [
+    { timestamp: now - 2 * minute, ping_ct: 42, loss_ct: 0, ping_cu: 55, loss_cu: 2, loss_cm: 100 },
+    { timestamp: now - minute, ping_ct: 48, loss_ct: 1, ping_cm: 61, loss_cm: 3 }
+  ])
 })
 
 test('probe history accepts the common data-array response envelope', () => {

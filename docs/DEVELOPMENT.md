@@ -45,7 +45,7 @@ http://127.0.0.1:4173/?preview=1#/server/preview-2
 - 登录授权:`src/assets/js/shared/login.js` 与两个视图内的登录弹窗
 - 主题自定义:`src/assets/js/shared/theme.js`(两层持久化 + 导出)、`theme-settings.js`(校验),抽屉 UI 在 dashboard 模板中
 - 旗帜:`src/assets/js/shared/flags.js`
-- 首页探针历史:`src/assets/js/shared/probe-history.js`(24 小时窗口清洗/聚合),`dashboard.js`(可见卡片一次性历史加载、会话缓存与 WebSocket 末块增量)
+- 首页探针历史:`src/assets/js/shared/probe-history.js`(上游紧凑 `ping` / `loss` 窗口转换与动态聚合),`dashboard.js`(复用 `/api/servers` 内嵌窗口并合并 WebSocket 末块,不额外请求历史接口)
 - 共享模块:`src/assets/js/shared/`
 - 公共样式:`src/assets/css/main.css`;详情样式:`src/assets/css/detail.css`
 - 构建/发布:`scripts/build.mjs`、`scripts/release-theme.mjs`

@@ -7,9 +7,9 @@ CSM-Next 是**纯静态单页应用**:一个 `index.html` 内嵌两个视图模�
 ```text
 index.html (#/ 仪表盘, #/server/:id 详情)
   ├─ GET  /api/config                ─┐
-  ├─ GET  /api/servers                │ 上游 CF-Server-Monitor
+  ├─ GET  /api/servers                │ 上游 CF-Server-Monitor（首页延迟窗口随列表返回）
   ├─ GET  /api/server?id=...          │ Worker / D1 / Durable Object
-  ├─ GET  /api/history/all?id=...     │
+  ├─ GET  /api/history/all?id=...     │ 节点详情长历史
   ├─ WebSocket /api/ws               ─┘
   ├─ IMG  /flags/<code>.svg、/os-icons/*(上游静态资产)
   └─ 主题设置:localStorage + window.__CSM_THEME__(无任何主题侧 API)

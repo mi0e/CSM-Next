@@ -1161,7 +1161,7 @@ svg {
 .probe-timeline {
   display: grid;
   width: 100%;
-  grid-template-columns: repeat(24, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--probe-history-buckets, 24), minmax(0, 1fr));
   gap: 2px;
   padding: 0;
   overflow: visible;
@@ -1189,36 +1189,14 @@ svg {
   background: var(--red);
 }
 
-.probe-time-block.missing,
-.probe-time-block.loading {
+.probe-time-block.missing {
   background: var(--track);
   box-shadow: inset 0 0 0 1px var(--line-soft);
-}
-
-.probe-time-block.loading {
-  cursor: default;
-  animation: probe-history-pulse 1.4s ease-in-out infinite alternate;
 }
 
 .probe-time-block:hover {
   filter: brightness(1.12);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.34);
-}
-
-.probe-history-state {
-  display: grid;
-  min-height: 28px;
-  margin-top: 8px;
-  place-items: center;
-  border: 1px dashed var(--line-soft);
-  border-radius: 7px;
-  color: var(--muted);
-  font-size: 9px;
-}
-
-@keyframes probe-history-pulse {
-  from { opacity: 0.48; }
-  to { opacity: 0.9; }
 }
 
 .ping-sparkline {

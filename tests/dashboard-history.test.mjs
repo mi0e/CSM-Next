@@ -109,6 +109,25 @@ globalThis.WebSocket = class {
 
 const now = Date.now()
 let historyFetches = 0
+const latencyWindowStart = now - 2 * 3600_000 + 1_000
+const latencyWindowStep = 2 * 3600_000 / 20
+const pingWindow = Array.from({ length: 20 }, (_, index) => {
+  const base = index < 7 ? 40 : (index < 14 ? 120 : 220)
+  return {
+    ts: latencyWindowStart + index * latencyWindowStep,
+    ct: base,
+    cu: base + 10,
+    cm: base + 20,
+    bd: false
+  }
+})
+const lossWindow = pingWindow.map(point => ({
+  ts: point.ts,
+  ct: 0,
+  cu: 1,
+  cm: 2,
+  bd: false
+}))
 const json = value => new Response(JSON.stringify(value), {
   headers: { 'Content-Type': 'application/json' }
 })
@@ -125,9 +144,13 @@ globalThis.fetch = async input => {
       cpu: 1, ram_total: 1024, ram_used: 128, disk_total: 10240, disk_used: 1024,
       ping_ct: 45, ping_cu: 155, ping_cm: 65, ping_bd: 'false',
       loss_ct: 0, loss_cu: 0, loss_cm: 0, loss_bd: 0,
+      ping: pingWindow, loss: lossWindow,
       last_updated: now, report_timestamp: now
     }],
-    sysConfig: { long_history_points: 120 }
+    sysConfig: {
+      show_three_net_details: true,
+      latency_window: { hours: 2, points: 20 }
+    }
   })
   if (url === 'https://upstream.example/api/history/all?id=node-1&hours=24') {
     historyFetches += 1
@@ -146,13 +169,13 @@ await mount({ name: 'dashboard' })
 await new Promise(resolve => realSetTimeout(resolve, 240))
 
 const cards = nodeFor('#cardGroups').innerHTML
-if (historyFetches !== 1) throw new Error(`Expected one visible-card history request, received ${historyFetches}`)
+if (historyFetches !== 0) throw new Error(`Dashboard must reuse /api/servers latency data, received ${historyFetches} extra history requests`)
 if (!cards.includes('>CT<') || !cards.includes('45 ms')) throw new Error('Live probe values did not render')
 if (!cards.includes('ping-value warn') || !cards.includes('155 ms')) throw new Error('Warn-level latency color did not render')
 if (cards.includes('>BD<')) throw new Error('Disabled probe line must be hidden')
-if (!cards.includes('过去 24 小时')) throw new Error('24-hour history label did not render')
-if (!cards.includes('data-probe-source="history"')) throw new Error('Complete history did not replace the loading state')
-if ((cards.match(/data-probe-bucket=/g) || []).length !== 24) throw new Error('Expected exactly 24 history blocks')
+if (!cards.includes('过去 2 小时')) throw new Error('Upstream latency-window label did not render')
+if (!cards.includes('data-probe-source="server-window"')) throw new Error('Embedded server history did not render')
+if ((cards.match(/data-probe-bucket=/g) || []).length !== 20) throw new Error('Expected the upstream-configured 20 history blocks')
 if (!cards.includes('probe-time-block good') || !cards.includes('probe-time-block warn') || !cards.includes('probe-time-block bad')) {
   throw new Error('Latency threshold colors did not render across the timeline')
 }
@@ -177,9 +200,9 @@ socket.emit('message', {
 await new Promise(resolve => realSetTimeout(resolve, 160))
 
 const updated = nodeFor('#cardGroups').innerHTML
-if (historyFetches !== 1) throw new Error(`WebSocket samples must not trigger another history request, received ${historyFetches}`)
+if (historyFetches !== 0) throw new Error(`WebSocket samples must not trigger history requests, received ${historyFetches}`)
 if (!updated.includes('90 ms')) throw new Error('WebSocket sample did not refresh live probe values')
-if ((updated.match(/data-probe-bucket=/g) || []).length !== 24) throw new Error('WebSocket update changed the fixed block count')
-if (!updated.includes('data-probe-source="history"')) throw new Error('WebSocket update dropped the loaded history')
+if ((updated.match(/data-probe-bucket=/g) || []).length !== 20) throw new Error('WebSocket update changed the upstream block count')
+if (!updated.includes('data-probe-source="server-window"')) throw new Error('WebSocket update dropped the embedded history')
 
-console.log('Dashboard history smoke test passed: one complete 24-hour load plus WebSocket-only updates.')
+console.log('Dashboard history smoke test passed: embedded upstream window plus WebSocket-only updates, with zero extra history requests.')

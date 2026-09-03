@@ -116,13 +116,13 @@ test('enabled overview uses a consistent two-column by three-row card grid', asy
   assert.match(at560, /\.overview-shell:not\(\.is-globe-enabled\) #currentTimeCard\s*\{[^}]*grid-column:\s*auto/)
 })
 
-test('history timeline uses 24 equal grid tracks without clipped edge blocks', async () => {
+test('history timeline uses a dynamic number of equal tracks without clipped edge blocks', async () => {
   const css = await readFile(resolve(root, 'src/assets/css/main.css'), 'utf8')
   const timeline = css.match(/\.probe-timeline\s*\{([^}]+)\}/)?.[1] || ''
   const block = css.match(/\.probe-time-block\s*\{([^}]+)\}/)?.[1] || ''
 
   assert.match(timeline, /display:\s*grid/)
-  assert.match(timeline, /grid-template-columns:\s*repeat\(24,\s*minmax\(0,\s*1fr\)\)/)
+  assert.match(timeline, /grid-template-columns:\s*repeat\(var\(--probe-history-buckets,\s*24\),\s*minmax\(0,\s*1fr\)\)/)
   assert.match(timeline, /padding:\s*0/)
   assert.match(timeline, /overflow:\s*visible/)
   assert.match(block, /width:\s*100%/)
