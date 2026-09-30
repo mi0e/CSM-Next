@@ -1109,12 +1109,17 @@ svg {
 }
 
 .ping-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--muted);
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 9px;
 }
 
 .ping-value {
+  flex-shrink: 0;
   overflow: hidden;
   color: var(--green);
   font-family: "SFMono-Regular", Consolas, monospace;

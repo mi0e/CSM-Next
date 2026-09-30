@@ -147,6 +147,10 @@
           <p id="serverSummary" class="server-summary"><span></span><em>--</em></p>
         </section>
 
+        <div id="realtimeNotice" class="status-banner" role="status" hidden>
+          <p data-i18n="realtimePaused">实时更新已暂停，定时刷新仍可使用。</p>
+          <button id="resumeRealtime" type="button" data-i18n="resumeRealtime">继续实时更新</button>
+        </div>
         <div id="statusBanner" class="status-banner" role="status" hidden>
           <div>
             <strong id="statusTitle">无法读取监控数据</strong>
@@ -367,6 +371,10 @@
       </header>
 
       <main class="detail-page">
+        <div id="realtimeNotice" class="status-banner" role="status" hidden>
+          <p data-i18n="realtimePaused">实时更新已暂停，定时刷新仍可使用。</p>
+          <button id="resumeRealtime" type="button" data-i18n="resumeRealtime">继续实时更新</button>
+        </div>
         <section id="detailLoading" class="detail-loading" aria-live="polite">
           <span class="detail-spinner"></span><p data-i18n="loading">正在载入节点详情</p>
         </section>

@@ -1,4 +1,6 @@
-import { getJwt, setJwt, isLoggedIn } from './shared/auth.js'
+import { createRealtime, realtimeUrl } from './shared/realtime.js'
+import { probeLines, probeMetric, PROBE_LINES } from './shared/ping.js'
+import { getJwt, setJwt } from './shared/auth.js'
 import { originalAdminUrl, resolveAdminUrl } from './shared/admin.js'
 import { escapeHtml } from './shared/dom.js'
 import { flagMarkup } from './shared/flags.js'
@@ -17,13 +19,14 @@ const MB = 1024 * 1024
 
 const translations = {
   zh: {
+    realtimePaused: '实时更新已暂停，定时刷新仍可使用。', resumeRealtime: '继续实时更新',
     dashboard: '仪表盘', refresh: '刷新数据', theme: '切换明暗主题', language: 'Switch to English', admin: '管理后台',
     loading: '正在载入节点详情', loadFailed: '无法载入节点详情', retry: '重试', back: '返回仪表盘',
     online: '在线', offline: '离线', cpu: 'CPU', architecture: '架构', os: '操作系统',
     netSpeed: '网络速度', traffic: '流量', ram: '内存', swap: '交换空间', disk: '磁盘', uptime: '运行时间', lastUpdate: '最后更新',
     connections: '连接数', processes: '进程', cores: '{count} 核', unavailable: '—', download: '下行', upload: '上行',
     historyEmpty: '当前时间范围没有历史数据',
-    loginRequired: '超过 1 小时的历史数据需要登录。主题与原后台域名不同，登录状态不会自动共享，请在当前站点登录一次。',
+    loginRequired: '后端要求登录后查看此范围的历史数据，请先登录。',
     loginTitle: '登录后查看长历史',
     loginMessage: 'JWT 保存在浏览器当前域名下。原管理端登录不会自动穿透到本主题，请在此输入账号密码。',
     username: '用户名', password: '密码', login: '登录', cancel: '取消', openAdmin: '打开原站后台',
@@ -34,13 +37,14 @@ const translations = {
     justNow: '刚刚', ago: '{value}前', dayShort: '天', hourShort: '时', minuteShort: '分', secondShort: '秒'
   },
   en: {
+    realtimePaused: 'Live updates paused. Periodic refresh is still available.', resumeRealtime: 'Resume live updates',
     dashboard: 'Dashboard', refresh: 'Refresh data', theme: 'Toggle color theme', language: '切换到中文', admin: 'Admin',
     loading: 'Loading server detail', loadFailed: 'Unable to load server detail', retry: 'Retry', back: 'Back to dashboard',
     online: 'Online', offline: 'Offline', cpu: 'CPU', architecture: 'Architecture', os: 'OS',
     netSpeed: 'Net Spd', traffic: 'Traffic', ram: 'RAM', swap: 'Swap', disk: 'Disk', uptime: 'Uptime', lastUpdate: 'Last Update',
     connections: 'Connections', processes: 'Processes', cores: '{count} Cores', unavailable: '—', download: 'Download', upload: 'Upload',
     historyEmpty: 'No historical data in this range',
-    loginRequired: 'History beyond one hour requires login. Because this theme uses a different domain, the original Admin session is not shared—sign in here once.',
+    loginRequired: 'The backend requires sign-in to view this history range.',
     loginTitle: 'Sign in for long history',
     loginMessage: 'JWT tokens are scoped to the current browser origin. Logging into the original Admin panel does not transfer credentials here.',
     username: 'Username', password: 'Password', login: 'Sign in', cancel: 'Cancel', openAdmin: 'Open original admin',
@@ -61,13 +65,14 @@ let elements
 
 function createState(route = {}) {
   return {
+    destroyed: false, dirtyMetrics: new Set(), liveRendering: false, historyRequest: 0,
     config: {}, sites: [], site: null, server: null, history: [], hours: 1, apiConfig: {},
     themeSettings: normalizeThemeSettings(), themeSettingsLoaded: false,
     id: route.id || '', siteIndex: Number(route.siteIndex) || 0,
     preview: new URLSearchParams(location.search).get('preview') === '1',
     language: localStorage.getItem('csm-next-language') || (navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'),
-    theme: localStorage.getItem('csm-next-theme') || 'light', tab: 'load', socket: null, socketManual: false,
-    socketRetry: null, renderTimer: null, refreshTimer: null, clockTimer: null,
+    theme: localStorage.getItem('csm-next-theme') || 'light', tab: 'load', socket: null,
+    renderTimer: null, resizeTimer: null, refreshTimer: null, clockTimer: null,
     pendingHistoryHours: null, loginBusy: false, turnstileWidgetId: null
   }
 }
@@ -280,7 +285,9 @@ async function submitLogin(event) {
     const pendingHours = state.pendingHistoryHours ?? state.hours
     closeLoginModal({ clearPending: true })
     showToast(t('loginSuccess'))
+    await refresh()
     await loadHistory(pendingHours)
+    connectSocket()
   } catch (error) {
     showLoginError(error.message || t('loginFailed'))
   } finally {
@@ -367,7 +374,8 @@ function specCard(label, value, note = '', classes = '') {
 
 function renderIdentity() {
   const server = state.server; const online = isOnline(server)
-  elements.nodeFlag.innerHTML = regionFlag(server.region)
+  const flag = regionFlag(server.region)
+  if (elements.nodeFlag.innerHTML !== flag) elements.nodeFlag.innerHTML = flag
   elements.nodeName.textContent = server.name || server.id
   elements.nodeId.textContent = server.id
   elements.nodeStatus.textContent = online ? t('online') : t('offline')
@@ -466,6 +474,18 @@ function bindChartHover(target, context) {
 }
 
 function renderLineChart(target, rows, series, options = {}) {
+  const fields = target === elements.cpuChart ? ['cpu']
+    : target === elements.ramChart ? ['ram_used', 'swap_used']
+    : target === elements.diskChart ? ['disk_used']
+    : target === elements.netChart ? ['net_in_speed', 'net_out_speed']
+    : target === elements.connectionsChart ? ['tcp_conn', 'udp_conn']
+    : target === elements.processesChart ? ['processes']
+    : PROBE_LINES.flatMap(line => [line.ping, line.loss])
+  if (state.liveRendering) {
+    if ((state.tab === 'ping') !== (target === elements.pingChart)) return
+    if (!fields.some(field => state.dirtyMetrics.has(field))) return
+  }
+  rows = rows.filter(row => fields.some(field => Object.hasOwn(row, field)))
   if (!rows.length) {
     target.innerHTML = `<div class="chart-empty">${escapeHtml(t('historyEmpty'))}</div>`
     return
@@ -525,7 +545,7 @@ function average(values) {
 }
 
 function renderCharts() {
-  const server = state.server; const rows = historyRows(); const latest = rows.at(-1) || server
+  const server = state.server; const rows = historyRows()
   elements.cpuCurrent.textContent = `${number(server.cpu).toFixed(2)}%`
   elements.ramCurrent.textContent = `${formatMb(server.ram_used)} / ${formatMb(server.ram_total)}\n${formatMb(server.swap_used)} / ${formatMb(server.swap_total)}`
   elements.diskCurrent.textContent = `${formatMb(server.disk_used)} / ${formatMb(server.disk_total)}`
@@ -550,20 +570,18 @@ function renderCharts() {
   ], { includeZero: true, formatY: formatCompact })
   renderLineChart(elements.processesChart, rows, [{ label: t('processes'), get: row => number(row.processes), color: colors.red, formatValue: value => `${Math.round(value)}` }], { includeZero: true, formatY: formatCompact })
 
-  const probes = [
-    { ping: 'ping_cm', loss: 'loss_cm', label: t('mobile'), color: colors.orange },
-    { ping: 'ping_cu', loss: 'loss_cu', label: t('unicom'), color: colors.green },
-    { ping: 'ping_ct', loss: 'loss_ct', label: t('telecom'), color: colors.blue },
-    { ping: 'ping_bd', loss: 'loss_bd', label: t('backup'), color: colors.magenta }
-  ]
+  if (state.liveRendering && (state.tab !== 'ping' || !PROBE_LINES.some(line => state.dirtyMetrics.has(line.ping) || state.dirtyMetrics.has(line.loss)))) return
+  const palette = [colors.blue, colors.green, colors.orange, colors.magenta, colors.red, colors.cyan, '#a78bfa', '#d4a017']
+  const probes = probeLines(server, { ...state.apiConfig, ...server.sysConfig }, state.language)
+    .map(line => ({ ...line, color: palette[PROBE_LINES.findIndex(item => item.id === line.id)] }))
   elements.pingLegend.innerHTML = probes.map(probe => {
-    const pings = rows.map(row => row[probe.ping]).filter(value => Number.isFinite(Number(value)))
-    const losses = rows.map(row => row[probe.loss]).filter(value => Number.isFinite(Number(value)))
-    const current = number(server[probe.ping], number(latest?.[probe.ping]))
-    const loss = average(losses) ?? number(server[probe.loss])
-    return `<div class="ping-legend-item" style="--legend-color:${probe.color}"><strong>${escapeHtml(probe.label)}</strong><span>${current ? `${current.toFixed(0)} ms` : '—'} · ${loss.toFixed(1)}% ${t('loss')} · ${standardDeviation(pings).toFixed(1)} ms ${t('volatility')}</span></div>`
+    const pings = rows.map(row => probeMetric(row[probe.ping])).filter(value => value !== null)
+    const losses = rows.map(row => probeMetric(row[probe.loss], 'loss')).filter(value => value !== null)
+    const current = probeMetric(server[probe.ping])
+    const loss = average(losses) ?? probeMetric(server[probe.loss], 'loss')
+    return `<div class="ping-legend-item" style="--legend-color:${probe.color}"><strong title="${escapeHtml(probe.label)}">${escapeHtml(probe.label)}</strong><span>${current ? `${current.toFixed(0)} ms` : '—'} · ${loss === null ? '\u2014' : loss.toFixed(1) + '%'} ${t('loss')} · ${pings.length ? standardDeviation(pings).toFixed(1) + ' ms' : '\u2014'} ${t('volatility')}</span></div>`
   }).join('')
-  renderLineChart(elements.pingChart, rows, probes.map(probe => ({ label: probe.label, get: row => Number(row[probe.ping]), color: probe.color, formatValue: value => `${Math.round(value)} ms` })), { pad: true, height: 430, formatY: value => `${Math.round(value)}ms` })
+  renderLineChart(elements.pingChart, rows, probes.map(probe => ({ label: probe.label, get: row => probeMetric(row[probe.ping]) ?? NaN, color: probe.color, formatValue: value => `${Math.round(value)} ms` })), { pad: true, height: 430, formatY: value => `${Math.round(value)}ms` })
 }
 
 function renderAll() {
@@ -582,17 +600,14 @@ function showHistoryNotice(message = '') {
 }
 
 async function loadHistory(hours = state.hours, button = null) {
-  if (!state.preview && hours > 1 && !isLoggedIn(currentBase())) {
-    showHistoryNotice(t('loginRequired'))
-    openLoginModal(hours)
-    return
-  }
-
+  const owner = state
+  const requestId = ++state.historyRequest
   button?.classList.add('is-loading')
   try {
     const data = state.preview
       ? previewHistory(state.server).filter(row => timestamp(row.timestamp) >= Date.now() - hours * 3600000)
-      : await requestJson(`/api/history/all?id=${encodeURIComponent(state.id)}&hours=${hours}`)
+      : await requestJson(`/api/history/all?id=${encodeURIComponent(state.id)}&hours=${hours}`, { timeoutMs: 60000 })
+    if (owner !== state || owner.destroyed || requestId !== state.historyRequest) return
     state.history = normalizeHistory(data)
     state.hours = hours
     state.pendingHistoryHours = null
@@ -600,6 +615,7 @@ async function loadHistory(hours = state.hours, button = null) {
     document.querySelectorAll('.range-switch').forEach(group => group.querySelectorAll('button').forEach(item => item.classList.toggle('active', Number(item.dataset.hours) === hours)))
     renderCharts()
   } catch (error) {
+    if (owner !== state || owner.destroyed || requestId !== state.historyRequest) return
     if (error.status === 401) {
       const message = t('loginRequired')
       showHistoryNotice(message)
@@ -630,25 +646,22 @@ function showError(error) {
 }
 
 async function refresh({ notify = false, history = false } = {}) {
+  const owner = state
   elements.refreshButton.classList.add('is-spinning')
   try {
-    state.server = await fetchDetail()
+    const server = await fetchDetail()
+    if (owner !== state || owner.destroyed) return
+    state.server = server
     renderAll()
     if (history) await loadHistory(state.hours)
     if (notify) showToast(t('refreshed'))
-  } catch (error) { showError(error) }
-  finally { elements.refreshButton.classList.remove('is-spinning') }
-}
-
-function socketUrl() {
-  const url = new URL(joinUrl(state.site.base, '/api/ws'))
-  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-  url.searchParams.set('subscribe', state.id)
-  return url.href
+  } catch (error) { if (owner === state && !owner.destroyed) showError(error) }
+  finally { if (owner === state && !owner.destroyed) elements.refreshButton.classList.remove('is-spinning') }
 }
 
 function appendSample(data, sampleTime) {
   const row = { ...data, timestamp: timestamp(sampleTime ?? data.timestamp ?? data.last_updated) || Date.now() }
+  Object.keys(data).forEach(key => state.dirtyMetrics.add(key))
   state.history.push(row)
   const cutoff = Date.now() - Math.max(0.167, state.hours) * 3600000
   state.history = state.history.filter(item => timestamp(item.timestamp) >= cutoff).slice(-1800)
@@ -666,27 +679,41 @@ function handleSocketMessage(message) {
       })
     } else if (update.data) appendSample(update.data, update.ts ?? message.ts)
   }
-  clearTimeout(state.renderTimer)
-  state.renderTimer = setTimeout(renderAll, 100)
+  if (!state.dirtyMetrics.size || state.renderTimer || document.hidden) return
+  const owner = state
+  state.renderTimer = setTimeout(() => {
+    owner.renderTimer = null
+    if (owner !== state || owner.destroyed || document.hidden) return
+    renderIdentity()
+    state.liveRendering = true
+    renderCharts()
+    state.liveRendering = false
+    state.dirtyMetrics.clear()
+  }, 100)
 }
 
 function connectSocket() {
-  if (state.preview || state.socketManual) return
-  try {
-    const socket = new WebSocket(socketUrl()); state.socket = socket
-    socket.addEventListener('message', event => {
-      try { handleSocketMessage(JSON.parse(event.data)) } catch { /* ignore malformed message */ }
-    })
-    socket.addEventListener('close', () => {
-      if (!state.socketManual) state.socketRetry = setTimeout(connectSocket, 4000)
-    })
-    socket.addEventListener('error', () => socket.close())
-  } catch { state.socketRetry = setTimeout(connectSocket, 5000) }
+  if (state.preview || state.destroyed) return
+  closeSocket()
+  const owner = state
+  state.socket = createRealtime({
+    url: () => realtimeUrl(state.site.base, state.id, getJwt(state.site.base)),
+    timeoutMinutes: () => state.apiConfig.frontend_ws_timeout_minutes,
+    beforeResume: () => refresh({ history: true }),
+    onMessage: message => { if (owner === state && !owner.destroyed) handleSocketMessage(message) },
+    onPause: reason => {
+      if (owner !== state || owner.destroyed) return
+      const notice = document.querySelector('#realtimeNotice')
+      if (notice) notice.hidden = !reason
+    }
+  })
+  const notice = document.querySelector('#realtimeNotice')
+  if (notice) notice.hidden = true
 }
 
 function closeSocket() {
-  state.socketManual = true; clearTimeout(state.socketRetry)
-  try { state.socket?.close() } catch { /* noop */ }
+  state.socket?.destroy()
+  state.socket = null
 }
 
 let globalListeners = []
@@ -704,6 +731,7 @@ function removeGlobalListeners() {
 }
 
 function bindEvents() {
+  document.querySelector('#resumeRealtime')?.addEventListener('click', () => state.socket?.resume())
   addGlobalListener(document, 'error', event => {
     const image = event.target
     if (!image?.classList?.contains('region-flag')) return
@@ -739,7 +767,10 @@ function bindEvents() {
       closeLoginModal({ clearPending: true })
     }
   })
-  addGlobalListener(window, 'resize', () => { clearTimeout(state.renderTimer); state.renderTimer = setTimeout(renderCharts, 120) })
+  addGlobalListener(window, 'resize', () => {
+    clearTimeout(state.resizeTimer)
+    state.resizeTimer = setTimeout(() => { if (!state.destroyed) renderCharts() }, 120)
+  })
   addGlobalListener(window, 'beforeunload', closeSocket)
 }
 
@@ -759,14 +790,16 @@ async function init() {
     elements.versionText.textContent = state.apiConfig.version ? `CF-Server-Monitor ${state.apiConfig.version}` : 'CF-Server-Monitor Theme'
     elements.loading.hidden = true; elements.error.hidden = true; elements.content.hidden = false
     renderAll(); await loadHistory(1); connectSocket()
-    state.refreshTimer = setInterval(() => refresh(), 60000)
-    state.clockTimer = setInterval(() => { if (state.server) renderSpecs() }, 1000)
+    state.refreshTimer = setInterval(() => { if (!document.hidden) void refresh() }, 60000)
+    state.clockTimer = setInterval(() => { if (state.server && !document.hidden) renderSpecs() }, 1000)
   } catch (error) { showError(error) }
 }
 
 function destroy() {
+  state.destroyed = true
   closeSocket()
   clearTimeout(state.renderTimer)
+  clearTimeout(state.resizeTimer)
   clearInterval(state.refreshTimer)
   clearInterval(state.clockTimer)
   clearTimeout(showToast.timer)

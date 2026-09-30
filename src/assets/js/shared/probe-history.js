@@ -1,9 +1,5 @@
-export const PROBE_LINES = Object.freeze([
-  Object.freeze({ id: 'CT', ping: 'ping_ct', loss: 'loss_ct' }),
-  Object.freeze({ id: 'CU', ping: 'ping_cu', loss: 'loss_cu' }),
-  Object.freeze({ id: 'CM', ping: 'ping_cm', loss: 'loss_cm' }),
-  Object.freeze({ id: 'BD', ping: 'ping_bd', loss: 'loss_bd' })
-])
+import { PROBE_LINES, probeMetric } from './ping.js'
+export { PROBE_LINES } from './ping.js'
 
 export const PROBE_HISTORY_HOURS = 24
 export const PROBE_HISTORY_BUCKETS = 24
@@ -15,13 +11,7 @@ function timestamp(value) {
 }
 
 function metric(value, type) {
-  if (value === null || value === undefined || value === '') return null
-  if (typeof value === 'boolean' || String(value).toLowerCase() === 'false') return null
-  const number = Number(value)
-  if (!Number.isFinite(number) || number < 0) return null
-  if (type === 'latency' && number === 0) return null
-  if (type === 'loss' && number > 100) return null
-  return number
+  return probeMetric(value, type === 'latency' ? 'ping' : 'loss')
 }
 
 function average(values) {

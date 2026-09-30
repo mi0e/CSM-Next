@@ -19,7 +19,8 @@ UI 仿照 [komari-next](https://github.com/tonyliuzj/komari-next) 制作,数据�
 - CPU、内存、磁盘、网络和流量信息
 - 节点详情(hash 路由 `#/server/:id`)与历史负载图表
 - 首页直接复用上游 `/api/servers` 附带的延迟窗口并按其点数显示等宽色块,详情页展示 Ping、丢包、波动和悬浮数据
-- WebSocket 实时更新,断线后自动重连
+- WebSocket 实时更新，断线后退避重连；页面隐藏时暂停，支持上游连接超时设置和手动恢复
+- 支持自定义 Ping 名称与新增四条线路，按后端权限查看历史（新版上游匿名最多 24 小时）
 - 多个 Worker 数据合并
 - 中文、英文、明暗主题和移动端布局
 - Cloudflare Turnstile

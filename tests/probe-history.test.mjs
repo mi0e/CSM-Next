@@ -8,6 +8,13 @@ import {
 const now = 1_700_000_000_000
 const minute = 60_000
 
+test('additional probes survive compact windows and missing loss is not zero', () => {
+  assert.deepEqual(normalizeProbeWindow({
+    ping: [{ ts: now, node_1: 25, node_2: false, node_3: null }],
+    loss: [{ ts: now, node_1: 0, node_2: false, node_3: ' ' }]
+  }), [{ timestamp: now, ping_node_1: 25, loss_node_1: 0 }])
+})
+
 test('probe history keeps only valid reported latency and loss metrics', () => {
   const rows = normalizeProbeHistory({ rows: [{
     timestamp: now - minute,

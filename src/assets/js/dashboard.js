@@ -1,3 +1,5 @@
+import { createRealtime, realtimeUrl } from './shared/realtime.js'
+import { patchElement } from './shared/patch-dom.js'
 import { getJwt, setJwt } from './shared/auth.js'
 import { originalAdminUrl, resolveAdminUrl } from './shared/admin.js'
 import { formatBillingPrice } from './shared/billing.js'
@@ -5,7 +7,7 @@ import { escapeHtml } from './shared/dom.js'
 import { flagMarkup } from './shared/flags.js'
 import { fetchJson } from './shared/http.js'
 import {
-  getLoginTurnstileToken, loginTurnstileRequired, loginWithCredentials,
+  getLoginTurnstileToken, loginTurnstileRequired, loginWithCredentials, loadTurnstileScript,
   removeLoginTurnstile, renderLoginTurnstile
 } from './shared/login.js'
 import {
@@ -19,7 +21,7 @@ import {
   mergeProbeHistory, normalizeProbeWindow, pingSparkline,
   PROBE_HISTORY_BUCKETS, PROBE_HISTORY_HOURS, PROBE_LINES, summarizeProbeHistory
 } from './shared/probe-history.js'
-import { isPingDisabled, isPingValid, pingLevel } from './shared/ping.js'
+import { isPingValid, pingLevel, probeLines } from './shared/ping.js'
 import { serverRouteHash } from './shared/route.js'
 import { injectedSiteTitle, resolveSiteTitle } from './shared/title.js'
 import { joinUrl, metaApiBases, metaContent, normalizeBase } from './shared/url.js'
@@ -34,6 +36,7 @@ const UPSTREAM_PROBE_HISTORY_BUCKETS = 20
 
 const translations = {
   zh: {
+    realtimePaused: '实时更新已暂停，定时刷新仍可使用。', resumeRealtime: '继续实时更新',
     dashboard: '仪表盘',
     currentTime: '当前时间',
     currentOnline: '当前在线',
@@ -132,6 +135,7 @@ const translations = {
     demoHint: '当前为 ?preview=1 本地预览模式。'
   },
   en: {
+    realtimePaused: 'Live updates paused. Periodic refresh is still available.', resumeRealtime: 'Resume live updates',
     dashboard: 'Dashboard',
     currentTime: 'Current Time',
     currentOnline: 'Current Online',
@@ -256,6 +260,8 @@ function createState() {
     language: localStorage.getItem('csm-next-language') || (navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'),
     theme: localStorage.getItem('csm-next-theme') || 'light',
     sockets: [],
+    dirtyServers: new Set(),
+    fullRender: false,
     socketOnline: 0,
     loading: false,
     preview: new URLSearchParams(location.search).get('preview') === '1',
@@ -655,26 +661,6 @@ function turnstileEnabled(site) {
   return value === true || value === 'true'
 }
 
-async function loadTurnstileScript() {
-  if (window.turnstile) return
-  await new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[data-csm-next-turnstile]')
-    if (existing) {
-      existing.addEventListener('load', resolve, { once: true })
-      existing.addEventListener('error', reject, { once: true })
-      return
-    }
-    const script = document.createElement('script')
-    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
-    script.async = true
-    script.defer = true
-    script.dataset.csmNextTurnstile = 'true'
-    script.addEventListener('load', resolve, { once: true })
-    script.addEventListener('error', reject, { once: true })
-    document.head.append(script)
-  })
-}
-
 function getTurnstileToken(siteKey) {
   return new Promise((resolve, reject) => {
     elements.turnstileWidget.replaceChildren()
@@ -709,13 +695,12 @@ async function verifyTurnstileSites() {
       if (!siteKey) throw new Error(t('verifyFailed'))
       elements.verifyMessage.textContent = t('verifyingSite', { current: index + 1, total: pending.length })
       const { token } = await getTurnstileToken(siteKey)
-      const response = await fetch(joinUrl(site.base, '/api/config'), {
+      const { response, data } = await fetchJson(joinUrl(site.base, '/api/config'), {
         headers: { 'X-Turnstile-Token': token },
         cache: 'no-store'
       })
-      const data = await response.json().catch(() => ({}))
-      const credential = response.headers.get('X-Turnstile-Verified') || data.turnstile_verified || ''
-      if (!response.ok || (data.verified !== true && !credential)) throw new Error(data.error || t('verifyFailed'))
+      const credential = response.headers.get('X-Turnstile-Verified') || data?.turnstile_verified || ''
+      if (!response.ok || (data?.verified !== true && !credential)) throw new Error(data?.error || t('verifyFailed'))
       site.verifiedCredential = credential
       site.config = { ...site.config, ...data, verified: true }
     }
@@ -1177,8 +1162,16 @@ async function fetchSiteServers(site) {
   }
 }
 
-async function refreshData({ notify = false } = {}) {
-  if (state.loading) return
+function refreshData(options = {}) {
+  if (state.refreshPromise) return state.refreshPromise
+  const owner = state
+  owner.refreshPromise = performRefresh(options).finally(() => { owner.refreshPromise = null })
+  return owner.refreshPromise
+}
+
+async function performRefresh({ notify = false } = {}) {
+  if (state.destroyed) return
+  const owner = state
   state.loading = true
   elements.refreshButton.classList.add('is-spinning')
   updateConnectionState(state.preview ? 'preview' : 'polling')
@@ -1201,6 +1194,7 @@ async function refreshData({ notify = false } = {}) {
     }
 
     const results = await Promise.allSettled(state.sites.map(fetchSiteServers))
+    if (owner !== state || owner.destroyed) return
     const successful = results.filter(result => result.status === 'fulfilled').map(result => result.value)
     const failures = results.flatMap((result, index) => (
       result.status === 'rejected' ? [{ error: result.reason, site: state.sites[index] }] : []
@@ -1241,6 +1235,7 @@ async function refreshData({ notify = false } = {}) {
     showError(error)
     updateConnectionState('error')
   } finally {
+    if (owner !== state || owner.destroyed) return
     state.loading = false
     elements.refreshButton.classList.remove('is-spinning')
   }
@@ -1356,15 +1351,16 @@ async function syncOverviewMode() {
 }
 
 function formatProbeValue(value) {
-  return Number.isFinite(Number(value)) ? `${Math.round(Number(value))} ms` : t('historyNoData')
+  return isPingValid(value) ? `${Math.round(Number(value))} ms` : t('historyNoData')
 }
 
-function renderProbeTimeline(buckets) {
+function renderProbeTimeline(buckets, server) {
+  const lines = probeLines(server, state.sites[server._siteIndex]?.config, state.language)
   return buckets.map((bucket, index) => {
     const level = bucket.value === null ? 'missing' : (pingLevel(bucket.value) || 'good')
-    const probeValues = PROBE_LINES.flatMap(line => {
+    const probeValues = lines.flatMap(line => {
       const value = bucket.probes?.[line.id]
-      return Number.isFinite(Number(value)) ? [`${line.id} ${formatProbeValue(value)}`] : []
+      return isPingValid(value) ? [`${line.label} ${formatProbeValue(value)}`] : []
     })
     const label = [
       `${formatProbeTime(bucket.start)}–${formatProbeTime(bucket.end)}`,
@@ -1402,7 +1398,7 @@ function probeHistoryMarkup(server) {
     label: historyLabel,
     markup: `<div class="probe-history" data-probe-source="${spec.source}" data-probe-samples="${summary.latency.sampleCount}">
         <div class="probe-history-meta"><span>${escapeHtml(t('historyLatency'))}</span><strong>${escapeHtml(averageLabel)}</strong></div>
-        <div class="probe-timeline" style="--probe-history-buckets:${spec.bucketCount}" role="img" aria-label="${escapeHtml(historyLabel)}">${renderProbeTimeline(summary.latency.buckets)}</div>
+        <div class="probe-timeline" style="--probe-history-buckets:${spec.bucketCount}" role="img" aria-label="${escapeHtml(historyLabel)}">${renderProbeTimeline(summary.latency.buckets, server)}</div>
       </div>`
   }
 }
@@ -1410,14 +1406,13 @@ function probeHistoryMarkup(server) {
 // Keep the upstream-style live values while reusing the compact latency window
 // already embedded in `/api/servers`; the dashboard never requests D1 history.
 function probeSectionMarkup(server) {
-  const lines = PROBE_LINES
-    .map(line => ({ id: line.id, value: server[line.ping] }))
-    .filter(line => !isPingDisabled(line.value))
+  const lines = probeLines(server, state.sites[server._siteIndex]?.config, state.language)
+    .map(line => ({ ...line, value: server[line.ping] }))
   if (!lines.length) return ''
   const items = lines.map(line => {
     const text = isPingValid(line.value) ? `${Number.parseInt(line.value, 10)} ms` : t('timeout')
     const level = pingLevel(line.value)
-    return `<span class="ping-item"><span class="ping-line">${line.id}</span><b class="ping-value${level ? ` ${level}` : ''}">${escapeHtml(text)}</b></span>`
+    return `<span class="ping-item"><span class="ping-line" title="${escapeHtml(line.label)}">${escapeHtml(line.label)}</span><b class="ping-value${level ? ` ${level}` : ''}">${escapeHtml(text)}</b></span>`
   }).join('')
   const history = probeHistoryMarkup(server)
   return `<section class="probe-section">
@@ -1488,8 +1483,16 @@ function emptyMarkup(hasAnyServers) {
   return `<div class="empty-state"><div><span class="empty-icon">⌁</span><strong>${escapeHtml(title)}</strong><p>${escapeHtml(hint)}</p></div></div>`
 }
 
-function renderCards() {
+function renderCards(changed = null) {
   const servers = filteredServers()
+  const nodes = changed && [...document.querySelectorAll('.server-card[data-server-key]')]
+  if (nodes?.length && nodes.length === servers.length) {
+    const byKey = new Map(servers.map(server => [server._sourceKey, server]))
+    if (nodes.every(node => byKey.has(node.dataset.serverKey))) {
+      nodes.forEach(node => { if (changed.has(node.dataset.serverKey)) patchElement(node, cardMarkup(byKey.get(node.dataset.serverKey))) })
+      return
+    }
+  }
   if (!servers.length) {
     elements.cardGroups.innerHTML = emptyMarkup(state.servers.length > 0)
     return
@@ -1514,17 +1517,11 @@ function meterMarkup(value) {
   return `<span class="table-meter"><i style="--value:${safe.toFixed(2)}"></i><span>${safe.toFixed(1)}%</span></span>`
 }
 
-function renderTable() {
-  const servers = filteredServers()
-  if (!servers.length) {
-    elements.serverTableBody.innerHTML = `<tr><td colspan="9">${escapeHtml(state.servers.length ? t('noNodes') : t('noServerData'))}</td></tr>`
-    return
-  }
-  elements.serverTableBody.innerHTML = servers.map(server => {
-    const online = isOnline(server)
-    const ram = percentage(Number(server.ram_used), Number(server.ram_total))
-    const disk = percentage(Number(server.disk_used), Number(server.disk_total))
-    return `<tr tabindex="0" data-server-key="${escapeHtml(server._sourceKey)}">
+function tableRowMarkup(server) {
+  const online = isOnline(server)
+  const ram = percentage(Number(server.ram_used), Number(server.ram_total))
+  const disk = percentage(Number(server.disk_used), Number(server.disk_total))
+  return `<tr tabindex="0" data-server-key="${escapeHtml(server._sourceKey)}">
       <td><span class="table-status${online ? '' : ' offline'}">${online ? t('online') : t('offline')}</span></td>
       <td><span class="table-node"><span class="table-flag" aria-hidden="true">${regionFlag(server.region, server._siteIndex)}</span>${escapeHtml(server.name || server.id)}</span></td>
       <td>${escapeHtml(String(server.region || 'XX').toUpperCase())}</td>
@@ -1535,7 +1532,23 @@ function renderTable() {
       <td><span class="up">↑ ${formatBytes(server.net_out_speed)}/s</span><br><span class="down">↓ ${formatBytes(server.net_in_speed)}/s</span></td>
       <td>${escapeHtml(formatUpdated(server.last_updated))}</td>
     </tr>`
-  }).join('')
+}
+
+function renderTable(changed = null) {
+  const servers = filteredServers()
+  const nodes = changed && [...document.querySelectorAll('#serverTableBody [data-server-key]')]
+  if (nodes?.length && nodes.length === servers.length) {
+    const byKey = new Map(servers.map(server => [server._sourceKey, server]))
+    if (nodes.every(node => byKey.has(node.dataset.serverKey))) {
+      nodes.forEach(node => { if (changed.has(node.dataset.serverKey)) patchElement(node, tableRowMarkup(byKey.get(node.dataset.serverKey))) })
+      return
+    }
+  }
+  if (!servers.length) {
+    elements.serverTableBody.innerHTML = `<tr><td colspan="9">${escapeHtml(state.servers.length ? t('noNodes') : t('noServerData'))}</td></tr>`
+    return
+  }
+  elements.serverTableBody.innerHTML = servers.map(tableRowMarkup).join('')
 }
 
 function renderViews() {
@@ -1596,28 +1609,32 @@ function openServerFromElement(element) {
 }
 
 function scheduleRender() {
-  clearTimeout(state.renderTimer)
+  if (state.renderTimer || state.destroyed || document.hidden) return
+  const owner = state
   state.renderTimer = setTimeout(() => {
+    owner.renderTimer = null
+    if (owner !== state || owner.destroyed || document.hidden) return
     recomputeStats()
-    renderAll()
-  }, 80)
+    if (state.fullRender) renderAll()
+    else {
+      renderOverview()
+      if (state.view === 'grid') renderCards(state.dirtyServers)
+      else renderTable(state.dirtyServers)
+    }
+    state.dirtyServers.clear()
+    state.fullRender = false
+  }, 100)
+}
+
+function updateRealtimeNotice() {
+  const notice = document.querySelector('#realtimeNotice')
+  if (notice) notice.hidden = !state.sockets.some(handle => handle.client?.paused)
 }
 
 function closeSockets() {
-  for (const handle of state.sockets) {
-    handle.manual = true
-    clearTimeout(handle.retryTimer)
-    try { handle.socket?.close() } catch { /* noop */ }
-  }
+  for (const handle of state.sockets) handle.client.destroy()
   state.sockets = []
   state.socketOnline = 0
-}
-
-function socketUrl(base) {
-  const url = new URL(joinUrl(base, '/api/ws'))
-  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-  url.searchParams.set('subscribe', 'all')
-  return url.href
 }
 
 function applySocketMessage(site, message) {
@@ -1636,7 +1653,9 @@ function applySocketMessage(site, message) {
     if (!samples.length) continue
     storeProbeSamples(key, samples.map(sample => ({ ...sample.data, timestamp: sample.timestamp })))
     const latest = samples[samples.length - 1]
-    const data = latest.data
+    const data = Object.assign({}, ...samples.map(sample => sample.data))
+    if (['name', 'server_group', 'region', 'sort_order'].some(field => Object.hasOwn(data, field) && data[field] !== state.servers[index][field])) state.fullRender = true
+    state.dirtyServers.add(key)
     state.servers[index] = {
       ...state.servers[index],
       ...data,
@@ -1651,48 +1670,32 @@ function applySocketMessage(site, message) {
 }
 
 function connectSocket(site) {
-  const ids = state.servers.filter(server => server._siteIndex === site.index).map(server => server.id).filter(Boolean)
-  if (!ids.length) return
-  const handle = { site, socket: null, manual: false, attempts: 0, retryTimer: null, connected: false }
+  const ids = () => state.servers.filter(server => server._siteIndex === site.index).map(server => server.id).filter(Boolean)
+  if (!ids().length || state.destroyed) return
+  const owner = state
+  const handle = { site, connected: false, client: null }
   state.sockets.push(handle)
-
-  const open = () => {
-    if (handle.manual) return
-    try {
-      const socket = new WebSocket(socketUrl(site.base))
-      handle.socket = socket
-      socket.addEventListener('open', () => {
-        handle.attempts = 0
-        handle.connected = true
-        state.socketOnline += 1
-        socket.send(JSON.stringify({ type: 'subscribe', scope: 'all', ids }))
-        updateConnectionState('live')
-      })
-      socket.addEventListener('message', event => {
-        try { applySocketMessage(site, JSON.parse(event.data)) } catch { /* ignore malformed messages */ }
-      })
-      socket.addEventListener('close', () => {
-        if (handle.connected) state.socketOnline = Math.max(0, state.socketOnline - 1)
-        handle.connected = false
-        updateConnectionState(state.socketOnline > 0 ? 'live' : 'polling')
-        if (!handle.manual) {
-          handle.attempts += 1
-          const delay = Math.min(30000, 1500 * (2 ** Math.min(handle.attempts, 4)))
-          handle.retryTimer = setTimeout(open, delay)
-        }
-      })
-      socket.addEventListener('error', () => socket.close())
-    } catch {
-      handle.retryTimer = setTimeout(open, 5000)
-    }
-  }
-  open()
+  handle.client = createRealtime({
+    url: () => realtimeUrl(site.base, 'all', getJwt(site.base)),
+    subscribe: () => ({ type: 'subscribe', scope: 'all', ids: ids() }),
+    timeoutMinutes: () => site.config.frontend_ws_timeout_minutes,
+    beforeResume: () => refreshData(),
+    onMessage: message => { if (owner === state && !owner.destroyed) applySocketMessage(site, message) },
+    onState: connected => {
+      handle.connected = connected
+      if (owner !== state || owner.destroyed) return
+      state.socketOnline = state.sockets.filter(item => item.connected).length
+      updateConnectionState(state.socketOnline ? 'live' : 'polling')
+    },
+    onPause: () => { if (owner === state && !owner.destroyed) updateRealtimeNotice() }
+  })
 }
 
 function connectSockets() {
   closeSockets()
-  if (state.preview) return
+  if (state.preview || state.destroyed) return
   state.sites.forEach(connectSocket)
+  updateRealtimeNotice()
 }
 
 let globalListeners = []
@@ -1710,6 +1713,10 @@ function removeGlobalListeners() {
 }
 
 function bindEvents() {
+  document.querySelector('#resumeRealtime')?.addEventListener('click', async () => {
+    await Promise.all(state.sockets.filter(handle => handle.client.paused).map(handle => handle.client.resume()))
+    updateRealtimeNotice()
+  })
   addGlobalListener(document, 'error', event => {
     const image = event.target
     if (!image?.classList?.contains('region-flag')) return
@@ -1718,9 +1725,17 @@ function bindEvents() {
     if (fallback) fallback.hidden = false
   }, true)
   elements.refreshButton.addEventListener('click', () => refreshData({ notify: true }))
-  elements.retryButton.addEventListener('click', () => {
+  elements.retryButton.addEventListener('click', async () => {
     if (elements.retryButton.dataset.action === 'login') openLoginModal()
-    else refreshData()
+    else {
+      try {
+        closeSockets()
+        await initializeSites()
+        await verifyTurnstileSites()
+        await refreshData()
+        if (state.servers.length) connectSockets()
+      } catch (error) { showError(error) }
+    }
   })
   elements.authButton.addEventListener('click', () => openLoginModal())
   elements.themeSettingsButton.addEventListener('click', openThemeDrawer)
@@ -1775,6 +1790,8 @@ function bindEvents() {
     if (!button) return
     state.view = button.dataset.view
     localStorage.setItem('csm-next-view', state.view)
+    if (state.view === 'grid') renderCards()
+    else renderTable()
     renderViews()
   })
   elements.cardGroups.addEventListener('click', event => openServerFromElement(event.target.closest('[data-server-key]')))
@@ -1848,8 +1865,9 @@ async function init() {
   }
 
   const refreshInterval = Math.max(15000, Number(state.config.refreshInterval) || DEFAULT_REFRESH_INTERVAL)
-  state.refreshTimer = setInterval(() => refreshData(), refreshInterval)
+  state.refreshTimer = setInterval(() => { if (!document.hidden) void refreshData() }, refreshInterval)
   state.onlineTimer = setInterval(() => {
+    if (document.hidden) return
     updateClock()
     recomputeStats()
     renderOverview()

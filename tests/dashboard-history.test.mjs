@@ -41,18 +41,13 @@ const nodeFor = selector => {
   return nodes.get(selector)
 }
 
-const card = new FakeElement()
-card.dataset.serverKey = '0:node-1'
 globalThis.document = {
   documentElement: new FakeElement(),
   body: new FakeElement(),
   head: new FakeElement(),
   title: '',
   querySelector: nodeFor,
-  querySelectorAll: selector => {
-    if (selector === '.server-card[data-server-key]' && nodeFor('#cardGroups').innerHTML.includes('data-server-key="0:node-1"')) return [card]
-    return []
-  },
+  querySelectorAll: () => [],
   createElement: () => new FakeElement(),
   addEventListener: () => {}
 }
@@ -192,7 +187,8 @@ socket.emit('message', {
       serverId: 'node-1',
       samples: [
         { ts: now - 120_000, data: { ping_ct: 60, ping_cu: 70, ping_cm: 80, cpu: 2 } },
-        { ts: now - 1_000, data: { ping_ct: 90, ping_cu: 100, ping_cm: 110, cpu: 3 } }
+        { ts: now - 1_000, data: { ping_ct: 90, ping_cu: 100, ping_cm: 110, cpu: 3 } },
+        { ts: now, metrics: { cpu: 4 } }
       ]
     }]
   })
