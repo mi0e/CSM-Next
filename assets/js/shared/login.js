@@ -1,29 +1,41 @@
 import { setJwt } from './auth.js'
 import { joinUrl } from './url.js'
+import { fetchJson } from './http.js'
 
 export function loginTurnstileRequired(config = {}) {
   const enabled = value => value === true || value === 1 || value === '1' || String(value || '').toLowerCase() === 'true'
   return enabled(config.turnstile_login_enabled) || enabled(config.turnstile_enabled)
 }
 
-export async function loadTurnstileScript() {
+let scriptPromise
+
+export async function loadTurnstileScript({ timeoutMs = 15000 } = {}) {
   if (window.turnstile) return
-  await new Promise((resolve, reject) => {
+  if (scriptPromise) return scriptPromise
+  scriptPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector('script[data-csm-next-turnstile]')
-    if (existing) {
-      existing.addEventListener('load', resolve, { once: true })
-      existing.addEventListener('error', reject, { once: true })
-      return
+    const script = existing || document.createElement('script')
+    const finish = error => {
+      clearTimeout(timer)
+      script.removeEventListener?.('load', loaded)
+      script.removeEventListener?.('error', failed)
+      if (error) { script.remove?.(); reject(error) }
+      else resolve()
     }
-    const script = document.createElement('script')
-    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
-    script.async = true
-    script.defer = true
-    script.dataset.csmNextTurnstile = 'true'
-    script.addEventListener('load', resolve, { once: true })
-    script.addEventListener('error', reject, { once: true })
-    document.head.append(script)
-  })
+    const failed = () => finish(new Error('Turnstile failed to load. Please retry.'))
+    const loaded = () => window.turnstile ? finish() : failed()
+    const timer = setTimeout(() => finish(new Error('Turnstile timed out. Please retry.')), timeoutMs)
+    script.addEventListener('load', loaded, { once: true })
+    script.addEventListener('error', failed, { once: true })
+    if (!existing) {
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+      script.async = true
+      script.defer = true
+      script.dataset.csmNextTurnstile = 'true'
+      document.head.append(script)
+    }
+  }).finally(() => { scriptPromise = null })
+  return scriptPromise
 }
 
 export function removeLoginTurnstile(widgetId, container) {
@@ -61,13 +73,12 @@ export function getLoginTurnstileToken(config = {}, widgetId = null) {
 export async function loginWithCredentials({ base, username, password, turnstileToken = '' }) {
   const headers = new Headers({ 'Content-Type': 'application/json' })
   if (turnstileToken) headers.set('X-Turnstile-Token', turnstileToken)
-  const response = await fetch(joinUrl(base, '/admin/api'), {
+  const { response, data } = await fetchJson(joinUrl(base, '/admin/api'), {
     method: 'POST',
     headers,
     body: JSON.stringify({ action: 'login', username, password }),
     cache: 'no-store'
   })
-  const data = await response.json().catch(() => null)
   const token = data?.token || data?.data?.token
   if (!response.ok || !token) {
     const error = new Error(data?.error || `HTTP ${response.status}`)
