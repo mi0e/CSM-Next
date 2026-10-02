@@ -16,9 +16,29 @@ export async function readJsonSafe(response) {
  * @returns {{ response: Response, data: any }}
  */
 export async function fetchJson(url, options = {}) {
-  const response = await fetch(url, { cache: 'no-store', ...options })
-  const data = await readJsonSafe(response)
-  return { response, data }
+  const { timeoutMs = 15000, signal, ...init } = options
+  const controller = new AbortController()
+  let timer
+  let rejectAbort
+  const aborted = new Promise((_, reject) => { rejectAbort = reject })
+  const abort = reason => {
+    controller.abort(reason)
+    rejectAbort(reason)
+  }
+  const onAbort = () => abort(signal.reason || new DOMException('Aborted', 'AbortError'))
+  if (signal?.aborted) onAbort()
+  else signal?.addEventListener('abort', onAbort, { once: true })
+  if (timeoutMs > 0) timer = setTimeout(() => abort(new DOMException('Request timed out', 'TimeoutError')), timeoutMs)
+  try {
+    return await Promise.race([aborted, (async () => {
+      const response = await fetch(url, { cache: 'no-store', ...init, signal: controller.signal })
+      const data = await readJsonSafe(response)
+      return { response, data }
+    })()])
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', onAbort)
+  }
 }
 
 /**

@@ -116,6 +116,15 @@ if (String(total) !== '8' || String(online) !== '7') {
   throw new Error(`Unexpected preview stats: total=${total}, online=${online}`)
 }
 
+if (String(nodeFor('#expiringCount').textContent) !== '1' || nodeFor('#expirationHint').textContent !== '30 天内 · 已到期 0 台') {
+  throw new Error('Expiry overview must include the offline node due within 30 days')
+}
+nodeFor('#languageButton').dispatch('click')
+if (nodeFor('#expirationHint').textContent !== 'Within 30 days · 0 expired') {
+  throw new Error('Expiry summary must update when switching language')
+}
+nodeFor('#languageButton').dispatch('click')
+
 const search = nodeFor('#searchInput')
 search.value = 'Hong Kong'
 search.dispatch('input')
@@ -153,6 +162,9 @@ if (nodeFor('#serverGlobe').hidden || !nodeFor('.overview-shell').classList.valu
   throw new Error('Saved globe setting did not enable the overview globe')
 }
 if (nodeFor('#currentTimeCard').hidden) throw new Error('Globe mode must retain the current-time card')
+if (nodeFor('#expiringCard').hidden || String(nodeFor('#expiringCount').textContent) !== '1') {
+  throw new Error('Globe mode must retain the expiry overview')
+}
 if (!/^\d{2}:\d{2}:\d{2}$/.test(nodeFor('#currentTime').textContent)) throw new Error('Current time was not rendered')
 if (document.documentElement.style['--panel-opacity'] !== '60%') throw new Error('Theme opacity was not applied')
 if (document.documentElement.style['--panel-blur'] !== '22px') throw new Error('Theme glass blur was not applied')

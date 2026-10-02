@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { probeLines, probeMetric } from '../src/assets/js/shared/ping.js'
 import test from 'node:test'
 
 const { nodePingField, effectivePingNode } = await import('../src/assets/js/shared/ping.js')
@@ -49,4 +50,21 @@ test('pingLevel follows upstream 100/200 thresholds and flags timeouts', () => {
   assert.equal(pingLevel(200), 'bad')
   assert.equal(pingLevel(null), 'bad')
   assert.equal(pingLevel('0'), 'bad')
+})
+test('optional probe lines follow per-node names, site labels and disabled values', () => {
+  const lines = probeLines({ ping_ct: 10, ping_cu: false, ping_cm: 'false', ping_bd: 0,
+    ping_node_1: null, node_1_name: 'Edge <1>', ping_node_2: false }, { custom_ct_name: 'Shanghai' })
+  assert.deepEqual(lines.map(line => line.label), ['Shanghai', 'BD', 'Edge <1>'])
+  assert.equal(probeLines({}).length, 4)
+})
+
+test('missing probe values never become zero latency or zero loss', () => {
+  for (const value of [null, undefined, '', ' ', false, 'false', NaN, 'invalid']) {
+    assert.equal(probeMetric(value), null)
+    assert.equal(probeMetric(value, 'loss'), null)
+  }
+  assert.equal(probeMetric(0), null)
+  assert.equal(probeMetric('0', 'loss'), 0)
+  assert.equal(probeMetric(100, 'loss'), 100)
+  assert.equal(probeMetric(101, 'loss'), null)
 })

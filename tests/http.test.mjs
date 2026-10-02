@@ -37,3 +37,26 @@ test('fetchJson returns response and parsed data', async () => {
     globalThis.fetch = original
   }
 })
+
+test('timeout aborts both a stalled fetch and a stalled response body', async () => {
+  const original = globalThis.fetch
+  try {
+    let signal
+    globalThis.fetch = (_url, options) => { signal = options.signal; return new Promise(() => {}) }
+    await assert.rejects(fetchJson('https://example.test', { timeoutMs: 10 }), { name: 'TimeoutError' })
+    assert.equal(signal.aborted, true)
+    globalThis.fetch = async () => ({ json: () => new Promise(() => {}) })
+    await assert.rejects(fetchJson('https://example.test', { timeoutMs: 10 }), { name: 'TimeoutError' })
+  } finally { globalThis.fetch = original }
+})
+
+test('caller cancellation is preserved and longer request budgets are configurable', async () => {
+  const original = globalThis.fetch
+  try {
+    globalThis.fetch = () => new Promise(() => {})
+    const controller = new AbortController()
+    const request = fetchJson('https://example.test', { signal: controller.signal, timeoutMs: 0 })
+    controller.abort()
+    await assert.rejects(request, { name: 'AbortError' })
+  } finally { globalThis.fetch = original }
+})

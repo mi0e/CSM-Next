@@ -7,9 +7,9 @@ CSM-Next 是**纯静态单页应用**:一个 `index.html` 内嵌两个视图模�
 ```text
 index.html (#/ 仪表盘, #/server/:id 详情)
   ├─ GET  /api/config                ─┐
-  ├─ GET  /api/servers                │ 上游 CF-Server-Monitor
+  ├─ GET  /api/servers                │ 上游 CF-Server-Monitor（首页延迟窗口随列表返回）
   ├─ GET  /api/server?id=...          │ Worker / D1 / Durable Object
-  ├─ GET  /api/history/all?id=...     │
+  ├─ GET  /api/history/all?id=...     │ 节点详情长历史
   ├─ WebSocket /api/ws               ─┘
   ├─ IMG  /flags/<code>.svg、/os-icons/*(上游静态资产)
   └─ 主题设置:localStorage + window.__CSM_THEME__(无任何主题侧 API)
@@ -54,7 +54,15 @@ index.html (#/ 仪表盘, #/server/:id 详情)
 
 ## 权限边界
 
-- 公开页面可读服务器列表、详情与后端允许的历史范围;超过 1 小时历史需 JWT(`Authorization: Bearer`,不读 Cookie)。
+- 历史范围由后端决定：直接请求所选范围，收到 `401` 后再引导登录。新版上游允许匿名读取至 24 小时，旧版可能更严格；HTTP 鉴权使用 `Authorization: Bearer`。
 - JWT 按 apiBase 域名隔离存 `localStorage`;同源部署时与上游后台共享 legacy `jwt_token`。
 - 主题设置纯客户端,不经任何主题侧服务端;站长层片段与上游 `custom_script` 同信任级别(本就由站长控制)。
 - 自定义 CSS 通过 `textContent` 写入固定 `<style>`,拒绝外部资源与标签注入。
+
+## 实时连接与请求
+
+- `shared/realtime.js` 统一首页和详情的连接生命周期。安全 WebSocket 使用对应 apiBase 的 JWT；同源 Cookie 仍由浏览器携带。断线指数退避，策略拒绝（1008）暂停重连。
+- 页面隐藏时关闭 WebSocket、暂停定时请求；恢复可见后先补 REST 数据再订阅。`frontend_ws_timeout_minutes > 0` 时按每次连接计时，超时后只在用户点击「继续实时更新」时恢复，切换可见性不会取消这个暂停状态。
+- 普通 API 与登录请求超时为 15 秒，详情历史查询为 60 秒；超时覆盖响应体读取。Turnstile 脚本共用加载任务，15 秒超时后移除失败脚本，允许重试。
+- 实时推送按 100ms 合并渲染。首页只更新当前视图中变化的节点并保留 DOM；详情只重绘当前选项卡中收到相关指标的图表。结构变化和定时 REST 刷新仍走完整渲染。
+- Ping 定义统一在 `shared/ping.js`，支持四条传统线路及 `ping_node_1` 至 `ping_node_4`。传统线路读取站点自定义名称，新线路读取节点名称；未返回的新线路和明确禁用的线路隐藏，缺失值不作为零延迟或零丢包参与统计。

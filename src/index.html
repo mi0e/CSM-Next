@@ -96,6 +96,15 @@
             <strong class="overview-line"><b class="down">↓</b><span id="speedDown">-</span></strong>
             </article>
 
+            <article id="expiringCard" class="overview-card overview-card-expiry">
+              <div class="overview-label">
+                <span data-i18n="expiringSoon">即将到期</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18M12 14v3"/><path d="M12 19h.01"/></svg>
+              </div>
+              <strong id="expiringCount">-</strong>
+              <small id="expirationHint">30 天内</small>
+            </article>
+
             <article id="currentTimeCard" class="overview-card">
               <div class="overview-label">
                 <span data-i18n="currentTime">当前时间</span>
@@ -147,6 +156,10 @@
           <p id="serverSummary" class="server-summary"><span></span><em>--</em></p>
         </section>
 
+        <div id="realtimeNotice" class="status-banner" role="status" hidden>
+          <p data-i18n="realtimePaused">实时更新已暂停，定时刷新仍可使用。</p>
+          <button id="resumeRealtime" type="button" data-i18n="resumeRealtime">继续实时更新</button>
+        </div>
         <div id="statusBanner" class="status-banner" role="status" hidden>
           <div>
             <strong id="statusTitle">无法读取监控数据</strong>
@@ -238,7 +251,7 @@
               <label class="theme-settings-toggle" for="themeGlobeEnabled">
                 <span>
                   <b data-i18n="themeGlobe">服务器地球仪</b>
-                  <small data-i18n="themeGlobeHint">在首页概览旁显示交互式地球仪，并将五张卡片整理为紧凑布局。</small>
+                  <small data-i18n="themeGlobeHint">在首页概览旁显示交互式地球仪，并将六张卡片整理为紧凑布局。</small>
                 </span>
                 <input id="themeGlobeEnabled" type="checkbox" role="switch">
                 <i aria-hidden="true"></i>
@@ -367,6 +380,10 @@
       </header>
 
       <main class="detail-page">
+        <div id="realtimeNotice" class="status-banner" role="status" hidden>
+          <p data-i18n="realtimePaused">实时更新已暂停，定时刷新仍可使用。</p>
+          <button id="resumeRealtime" type="button" data-i18n="resumeRealtime">继续实时更新</button>
+        </div>
         <section id="detailLoading" class="detail-loading" aria-live="polite">
           <span class="detail-spinner"></span><p data-i18n="loading">正在载入节点详情</p>
         </section>

@@ -1,9 +1,5 @@
-export const PROBE_LINES = Object.freeze([
-  Object.freeze({ id: 'CT', ping: 'ping_ct', loss: 'loss_ct' }),
-  Object.freeze({ id: 'CU', ping: 'ping_cu', loss: 'loss_cu' }),
-  Object.freeze({ id: 'CM', ping: 'ping_cm', loss: 'loss_cm' }),
-  Object.freeze({ id: 'BD', ping: 'ping_bd', loss: 'loss_bd' })
-])
+import { PROBE_LINES, probeMetric } from './ping.js'
+export { PROBE_LINES } from './ping.js'
 
 export const PROBE_HISTORY_HOURS = 24
 export const PROBE_HISTORY_BUCKETS = 24
@@ -15,12 +11,7 @@ function timestamp(value) {
 }
 
 function metric(value, type) {
-  if (value === null || value === undefined || value === '') return null
-  const number = Number(value)
-  if (!Number.isFinite(number) || number < 0) return null
-  if (type === 'latency' && number === 0) return null
-  if (type === 'loss' && number > 100) return null
-  return number
+  return probeMetric(value, type === 'latency' ? 'ping' : 'loss')
 }
 
 function average(values) {
@@ -47,6 +38,31 @@ export function normalizeProbeHistory(value) {
     }
     return [normalized]
   }).sort((left, right) => left.timestamp - right.timestamp)
+}
+
+/**
+ * Convert the compact latency window embedded by newer CF-Server-Monitor
+ * `/api/servers` responses into the row shape used by the dashboard.
+ * Upstream exposes separate `ping` and `loss` arrays whose points look like
+ * `{ ts, ct, cu, cm, bd }`.
+ */
+export function normalizeProbeWindow(value) {
+  const rows = new Map()
+  for (const type of ['ping', 'loss']) {
+    const points = Array.isArray(value?.[type]) ? value[type] : []
+    for (const point of points) {
+      const time = timestamp(point?.ts ?? point?.timestamp)
+      if (!time) continue
+      const row = rows.get(time) || { timestamp: time }
+      for (const line of PROBE_LINES) {
+        const key = line.id.toLowerCase()
+        if (!Object.prototype.hasOwnProperty.call(point, key)) continue
+        row[line[type]] = point[key]
+      }
+      rows.set(time, row)
+    }
+  }
+  return normalizeProbeHistory([...rows.values()])
 }
 
 export function mergeProbeHistory(existing, incoming, {

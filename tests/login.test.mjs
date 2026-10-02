@@ -15,7 +15,7 @@ globalThis.location = { origin: 'https://theme.example', href: 'https://theme.ex
 globalThis.window = globalThis
 
 const { getJwt } = await import('../src/assets/js/shared/auth.js')
-const { loginTurnstileRequired, loginWithCredentials } = await import('../src/assets/js/shared/login.js')
+const { loginTurnstileRequired, loginWithCredentials, loadTurnstileScript } = await import('../src/assets/js/shared/login.js')
 
 test('login Turnstile follows either upstream login flag', () => {
   assert.equal(loginTurnstileRequired({}), false)
@@ -47,4 +47,24 @@ test('login sends the upstream contract and stores a site-scoped token', async (
   assert.equal(request.options.headers.get('X-Turnstile-Token'), 'turnstile-token')
   assert.deepEqual(JSON.parse(request.options.body), { action: 'login', username: 'admin', password: 'secret' })
   assert.equal(getJwt(base), 'site-token')
+})
+
+test('Turnstile load timeout removes the stalled script and allows retry', async () => {
+  let script = null, appended = 0
+  globalThis.document = {
+    querySelector: () => script,
+    head: { append: node => { script = node; appended += 1 } },
+    createElement: () => ({ dataset: {}, listeners: new Map(),
+      addEventListener(key, fn) { this.listeners.set(key, fn) },
+      removeEventListener(key) { this.listeners.delete(key) },
+      remove() { script = null } })
+  }
+  await assert.rejects(loadTurnstileScript({ timeoutMs: 10 }), /timed out/)
+  assert.equal(script, null)
+  const retry = loadTurnstileScript({ timeoutMs: 100 })
+  globalThis.turnstile = { render() {} }
+  script.listeners.get('load')()
+  await retry
+  assert.equal(appended, 2)
+  delete globalThis.turnstile
 })
