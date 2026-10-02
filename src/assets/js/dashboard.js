@@ -4,6 +4,7 @@ import { getJwt, setJwt } from './shared/auth.js'
 import { originalAdminUrl, resolveAdminUrl } from './shared/admin.js'
 import { formatBillingPrice } from './shared/billing.js'
 import { escapeHtml } from './shared/dom.js'
+import { summarizeExpirations } from './shared/expiry.js'
 import { flagMarkup } from './shared/flags.js'
 import { fetchJson } from './shared/http.js'
 import {
@@ -40,6 +41,9 @@ const translations = {
     dashboard: '仪表盘',
     currentTime: '当前时间',
     currentOnline: '当前在线',
+    expiringSoon: '即将到期',
+    expirationSummary: '30 天内 · 已到期 {count} 台',
+    expirationUnavailable: '暂无到期信息',
     offline: '离线',
     online: '在线',
     region: '区域',
@@ -63,7 +67,7 @@ const translations = {
     themeGroupBackground: '背景图片', themeGroupEffects: '界面效果', themeGroupAdvanced: '高级',
     themeBackground: '图片地址', themeBackgroundHint: '仅允许 HTTPS 图片地址；留空表示不使用背景图。跨域图片可能需要站长在上游后台 CSP 名单放行。',
     themeTransparency: '界面透明化', themeTransparencyHint: '独立控制卡片和顶部栏的透明效果。',
-    themeGlobe: '服务器地球仪', themeGlobeHint: '在首页概览旁显示交互式地球仪，并将五张卡片整理为紧凑布局。',
+    themeGlobe: '服务器地球仪', themeGlobeHint: '在首页概览旁显示交互式地球仪，并将六张卡片整理为紧凑布局。',
     themeTransparencyMode: '透明方案',
     themeTransparencySoft: '柔和透明', themeTransparencySoftHint: '仅透明，不模糊后方内容。',
     themeTransparencyGlass: '毛玻璃', themeTransparencyGlassHint: '透明并模糊后方内容。',
@@ -139,6 +143,9 @@ const translations = {
     dashboard: 'Dashboard',
     currentTime: 'Current Time',
     currentOnline: 'Current Online',
+    expiringSoon: 'Expiring Soon',
+    expirationSummary: 'Within 30 days · {count} expired',
+    expirationUnavailable: 'No expiry information',
     offline: 'Offline',
     online: 'Online',
     region: 'Region',
@@ -162,7 +169,7 @@ const translations = {
     themeGroupBackground: 'Background', themeGroupEffects: 'Interface effects', themeGroupAdvanced: 'Advanced',
     themeBackground: 'Image URL', themeBackgroundHint: 'HTTPS image URLs only. Leave empty for no background. Cross-origin images may need a CSP allowlist entry in the upstream admin.',
     themeTransparency: 'Interface transparency', themeTransparencyHint: 'Controls transparency for cards and the top bar independently.',
-    themeGlobe: 'Server globe', themeGlobeHint: 'Shows an interactive globe beside the overview and arranges all five cards in a compact layout.',
+    themeGlobe: 'Server globe', themeGlobeHint: 'Shows an interactive globe beside the overview and arranges all six cards in a compact layout.',
     themeTransparencyMode: 'Transparency style',
     themeTransparencySoft: 'Soft', themeTransparencySoftHint: 'Transparent without blurring content behind it.',
     themeTransparencyGlass: 'Glass', themeTransparencyGlassHint: 'Transparent with background blur.',
@@ -248,6 +255,7 @@ function createState() {
       total: 0,
       online: 0,
       offline: 0,
+      expirations: { upcoming: 0, expired: 0, available: false },
       globalNetRx: 0,
       globalNetTx: 0,
       globalSpeedIn: 0,
@@ -302,6 +310,9 @@ const queryElements = () => ({
   totalCount: document.querySelector('#totalCount'),
   offlineCount: document.querySelector('#offlineCount'),
   regionCount: document.querySelector('#regionCount'),
+  expiringCard: document.querySelector('#expiringCard'),
+  expiringCount: document.querySelector('#expiringCount'),
+  expirationHint: document.querySelector('#expirationHint'),
   trafficUp: document.querySelector('#trafficUp'),
   trafficDown: document.querySelector('#trafficDown'),
   speedUp: document.querySelector('#speedUp'),
@@ -1264,6 +1275,7 @@ function recomputeStats() {
     total: state.servers.length,
     online,
     offline: state.servers.length - online,
+    expirations: summarizeExpirations(state.servers, state.siteConfigs, now),
     globalNetRx,
     globalNetTx,
     globalSpeedIn,
@@ -1277,6 +1289,13 @@ function renderOverview() {
   elements.totalCount.textContent = state.stats.total
   elements.offlineCount.textContent = state.stats.offline
   elements.regionCount.textContent = Object.keys(state.regions).filter(region => region !== 'XX').length
+  const expirations = state.stats.expirations
+  elements.expiringCount.textContent = expirations.available ? expirations.upcoming : '—'
+  elements.expirationHint.textContent = expirations.available
+    ? t('expirationSummary', { count: expirations.expired })
+    : t('expirationUnavailable')
+  elements.expiringCard.classList.toggle('has-expiring', expirations.upcoming > 0)
+  elements.expiringCard.classList.toggle('has-expired', expirations.expired > 0)
   elements.trafficUp.textContent = formatBytes(state.stats.globalNetTx)
   elements.trafficDown.textContent = formatBytes(state.stats.globalNetRx)
   elements.speedUp.textContent = `${formatBytes(state.stats.globalSpeedOut)}/s`

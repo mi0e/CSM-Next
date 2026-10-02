@@ -64,11 +64,13 @@ test('both view templates use locally inlined Lucide icons and no CDN assets', a
   assert.doesNotMatch(home, /jsdelivr|unpkg|cdnjs/)
 })
 
-test('overview defaults to five cards and keeps the optional globe outside the two list views', async () => {
+test('overview defaults to six cards and keeps the optional globe outside the two list views', async () => {
   const home = await readHome()
   const overview = home.match(/<section class="overview-shell"[\s\S]+?<section class="dashboard-controls"/)?.[0] || ''
-  assert.equal((overview.match(/<article(?: id="currentTimeCard")? class="overview-card/g) || []).length, 5)
+  assert.equal((overview.match(/<article(?: id="[^"]+")? class="overview-card/g) || []).length, 6)
   assert.match(overview, /id="currentTimeCard"/)
+  assert.match(overview, /id="expiringCard"/)
+  assert.match(overview, /id="expiringCount"/)
   assert.match(overview, /id="currentTime"/)
   assert.match(overview, /id="serverGlobe"[^>]+hidden/)
   assert.match(overview, /<canvas class="globe-canvas"[^>]+tabindex="0"/)
@@ -112,8 +114,10 @@ test('enabled overview uses a consistent two-column by three-row card grid', asy
   assert.match(at560, /\.overview-shell\.is-globe-enabled \.overview-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,[^}]*grid-template-rows:\s*repeat\(3,\s*minmax\(102px,\s*auto\)\)/)
   assert.doesNotMatch(css, /\.overview-shell\.is-globe-enabled #currentTimeCard/)
   assert.doesNotMatch(css, /\.overview-shell\.is-globe-enabled \.overview-grid > \.overview-card:not\(#currentTimeCard\)/)
-  assert.match(at840, /\.overview-shell:not\(\.is-globe-enabled\) #currentTimeCard\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/)
-  assert.match(at560, /\.overview-shell:not\(\.is-globe-enabled\) #currentTimeCard\s*\{[^}]*grid-column:\s*auto/)
+  assert.match(css, /\.overview-grid\s*\{[^}]*grid-template-columns:\s*repeat\(6,/)
+  assert.match(at840, /\.overview-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/)
+  assert.match(at560, /\.overview-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/)
+  assert.doesNotMatch(css, /#currentTimeCard\s*\{[^}]*grid-column:/)
 })
 
 test('history timeline uses a dynamic number of equal tracks without clipped edge blocks', async () => {

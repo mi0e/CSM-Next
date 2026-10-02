@@ -308,7 +308,7 @@ svg {
 
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -379,6 +379,18 @@ svg {
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.overview-card-expiry > small {
+  white-space: normal;
+}
+
+.overview-card-expiry.has-expiring > strong {
+  color: var(--orange);
+}
+
+.overview-card-expiry.has-expired > small {
+  color: var(--red);
 }
 
 .overview-card-double .overview-label {
@@ -2177,8 +2189,7 @@ body.theme-drawer-open {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .overview-card:nth-child(4),
-  .overview-card:nth-child(5) {
+  .overview-card {
     min-height: 115px;
   }
 
@@ -2208,10 +2219,6 @@ body.theme-drawer-open {
 
   .overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .overview-shell:not(.is-globe-enabled) #currentTimeCard {
-    grid-column: 1 / -1;
   }
 
   .overview-shell.is-globe-enabled {
@@ -2314,12 +2321,8 @@ body.theme-drawer-open {
   }
 
   .overview-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
-  }
-
-  .overview-shell:not(.is-globe-enabled) #currentTimeCard {
-    grid-column: auto;
   }
 
   .overview-shell.is-globe-enabled .overview-grid {
@@ -2327,16 +2330,17 @@ body.theme-drawer-open {
     grid-template-rows: repeat(3, minmax(102px, auto));
   }
 
+  .overview-card,
   .overview-shell.is-globe-enabled .overview-card {
     min-height: 102px;
     padding: 14px 13px 12px;
   }
 
-  .overview-shell.is-globe-enabled .overview-card > strong {
+  .overview-card > strong {
     font-size: 18px;
   }
 
-  .overview-shell.is-globe-enabled .overview-card > .overview-line {
+  .overview-card > .overview-line {
     font-size: 16px;
   }
 
