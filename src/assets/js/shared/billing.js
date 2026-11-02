@@ -6,14 +6,14 @@
  */
 
 export const BILLING_CYCLES = Object.freeze([
-  Object.freeze({ value: 'month', months: 1, shortLabelZh: '月', shortLabelEn: 'M' }),
-  Object.freeze({ value: 'quarter', months: 3, shortLabelZh: '季', shortLabelEn: 'Q' }),
-  Object.freeze({ value: 'half_year', months: 6, shortLabelZh: '半年', shortLabelEn: 'HY' }),
-  Object.freeze({ value: 'year', months: 12, shortLabelZh: '年', shortLabelEn: 'Y' }),
-  Object.freeze({ value: 'two_years', months: 24, shortLabelZh: '2年', shortLabelEn: '2Y' }),
-  Object.freeze({ value: 'three_years', months: 36, shortLabelZh: '3年', shortLabelEn: '3Y' }),
-  Object.freeze({ value: 'four_years', months: 48, shortLabelZh: '4年', shortLabelEn: '4Y' }),
-  Object.freeze({ value: 'five_years', months: 60, shortLabelZh: '5年', shortLabelEn: '5Y' })
+  Object.freeze({ value: 'month', months: 1, shortLabelZh: '月', shortLabelEn: 'M', labelEn: 'Monthly' }),
+  Object.freeze({ value: 'quarter', months: 3, shortLabelZh: '季', shortLabelEn: 'Q', labelEn: 'Quarterly' }),
+  Object.freeze({ value: 'half_year', months: 6, shortLabelZh: '半年', shortLabelEn: 'HY', labelEn: 'Semi annual' }),
+  Object.freeze({ value: 'year', months: 12, shortLabelZh: '年', shortLabelEn: 'Y', labelEn: 'Annual' }),
+  Object.freeze({ value: 'two_years', months: 24, shortLabelZh: '2年', shortLabelEn: '2Y', labelEn: 'Biennial' }),
+  Object.freeze({ value: 'three_years', months: 36, shortLabelZh: '3年', shortLabelEn: '3Y', labelEn: 'Triennial' }),
+  Object.freeze({ value: 'four_years', months: 48, shortLabelZh: '4年', shortLabelEn: '4Y', labelEn: '4 Years' }),
+  Object.freeze({ value: 'five_years', months: 60, shortLabelZh: '5年', shortLabelEn: '5Y', labelEn: 'Quinquennial' })
 ])
 
 // Order matters: multi-char symbols are matched before single-char fallbacks.
@@ -115,6 +115,7 @@ export function formatBillingPrice(server, lang = 'zh') {
   if (isFreePrice(price)) return lang === 'zh' ? '免费' : 'Free'
   const currency = normalizeCurrency(server?.currency || detectCurrencySymbol(server?.price))
   const cycle = getBillingCycleOption(detectBillingCycle(server?.price) || server?.billing_cycle)
-  const cycleLabel = lang === 'zh' ? cycle.shortLabelZh : cycle.shortLabelEn
+  // komari-next PriceTags wording (common.monthly / annual / …)
+  const cycleLabel = lang === 'zh' ? cycle.shortLabelZh : cycle.labelEn
   return `${currency}${price}/${cycleLabel}`
 }

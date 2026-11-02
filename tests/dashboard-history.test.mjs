@@ -165,12 +165,11 @@ await new Promise(resolve => realSetTimeout(resolve, 240))
 
 const cards = nodeFor('#cardGroups').innerHTML
 if (historyFetches !== 0) throw new Error(`Dashboard must reuse /api/servers latency data, received ${historyFetches} extra history requests`)
-if (!cards.includes('>CT<') || !cards.includes('45 ms')) throw new Error('Live probe values did not render')
-if (!cards.includes('ping-value warn') || !cards.includes('155 ms')) throw new Error('Warn-level latency color did not render')
-if (cards.includes('>BD<')) throw new Error('Disabled probe line must be hidden')
-if (!cards.includes('过去 2 小时')) throw new Error('Upstream latency-window label did not render')
+if (!cards.includes('ping-strip') || !cards.includes('>Latency<') || !cards.includes('>丢包<')) throw new Error('komari latency/loss strips did not render')
+if (!cards.includes('延迟统计（2h）')) throw new Error('Upstream latency-window label did not render')
 if (!cards.includes('data-probe-source="server-window"')) throw new Error('Embedded server history did not render')
 if ((cards.match(/data-probe-bucket=/g) || []).length !== 20) throw new Error('Expected the upstream-configured 20 history blocks')
+if ((cards.match(/data-loss-bucket=/g) || []).length !== 20) throw new Error('Expected 20 loss blocks alongside latency')
 if (!cards.includes('probe-time-block good') || !cards.includes('probe-time-block warn') || !cards.includes('probe-time-block bad')) {
   throw new Error('Latency threshold colors did not render across the timeline')
 }
@@ -197,7 +196,7 @@ await new Promise(resolve => realSetTimeout(resolve, 160))
 
 const updated = nodeFor('#cardGroups').innerHTML
 if (historyFetches !== 0) throw new Error(`WebSocket samples must not trigger history requests, received ${historyFetches}`)
-if (!updated.includes('90 ms')) throw new Error('WebSocket sample did not refresh live probe values')
+if (!updated.includes('>4%<')) throw new Error('WebSocket sample did not refresh the CPU gauge')
 if ((updated.match(/data-probe-bucket=/g) || []).length !== 20) throw new Error('WebSocket update changed the upstream block count')
 if (!updated.includes('data-probe-source="server-window"')) throw new Error('WebSocket update dropped the embedded history')
 

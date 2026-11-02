@@ -34,6 +34,8 @@ class FakeElement {
     if (!this.children.has(selector)) this.children.set(selector, new FakeElement())
     return this.children.get(selector)
   }
+  removeEventListener() {}
+  querySelectorAll() { return [] }
   replaceChildren() { this.innerHTML = '' }
   focus() {}
 }
@@ -100,14 +102,18 @@ if (cards.includes('jsdelivr')) {
 if (!cards.includes('gauge-progress') || cards.includes('conic-gradient')) {
   throw new Error('SVG gauge did not render')
 }
-if (!cards.includes('ping-item') || !cards.includes('>CT<')) {
-  throw new Error('Live probe value list did not render')
+if (!cards.includes('ping-strip') || !cards.includes('data-loss-bucket')) {
+  throw new Error('Latency and loss strips did not render')
 }
-if (!cards.includes('probe-timeline') || !cards.includes('过去 24 小时')) {
+if (!cards.includes('data-ping-popover=')) {
+  throw new Error('Trend button must open the komari-style ping popover')
+}
+if (!cards.includes('probe-timeline') || !cards.includes('延迟统计（24h）')) {
   throw new Error('Preview 24-hour latency timeline did not render')
 }
-if ((cards.match(/data-probe-bucket=/g) || []).length !== 8 * 24) {
-  throw new Error('Every preview card must render exactly 24 equal timeline blocks')
+// komari drops empty buckets; the offline preview node has no history, so 7 cards × 24 blocks.
+if ((cards.match(/data-probe-bucket=/g) || []).length !== 7 * 24) {
+  throw new Error('Every online preview card must render 24 latency blocks')
 }
 if (cards.includes('ping-sparkline')) {
   throw new Error('Preview should use the complete history timeline instead of a session sparkline')
@@ -142,7 +148,12 @@ if (!nodeFor('#themeDrawer').classList.values.has('is-open')) throw new Error('T
 if (!nodeFor('#serverGlobe').hidden || nodeFor('.overview-shell').classList.values.has('is-globe-enabled')) {
   throw new Error('Globe must be disabled by default')
 }
+if (!nodeFor('#expiringCard').hidden) throw new Error('komari parity: the expiry card must be opt-in')
+if (nodeFor('#serverMap').hidden || !nodeFor('#serverMap').querySelector('[data-map-svg]').innerHTML.includes('node-map-view__svg')) {
+  throw new Error('komari parity: the world map must render below the status cards by default')
+}
 nodeFor('#themeGlobeEnabled').checked = true
+nodeFor('#themeExpiryCardEnabled').checked = true
 nodeFor('#themeTransparencyEnabled').checked = true
 nodeFor('#themeTransparencyEnabled').dispatch('change')
 if (nodeFor('#themeTransparencyOptions').hidden) throw new Error('Transparency options did not open')
@@ -162,6 +173,7 @@ if (nodeFor('#serverGlobe').hidden || !nodeFor('.overview-shell').classList.valu
   throw new Error('Saved globe setting did not enable the overview globe')
 }
 if (nodeFor('#currentTimeCard').hidden) throw new Error('Globe mode must retain the current-time card')
+if (!nodeFor('#serverMap').hidden) throw new Error('The flat world map must hide while the globe is enabled')
 if (nodeFor('#expiringCard').hidden || String(nodeFor('#expiringCount').textContent) !== '1') {
   throw new Error('Globe mode must retain the expiry overview')
 }
@@ -174,6 +186,7 @@ await new Promise(resolvePromise => realSetTimeout(resolvePromise, 20))
 if (!nodeFor('#serverGlobe').hidden || nodeFor('.overview-shell').classList.values.has('is-globe-enabled')) {
   throw new Error('Restoring defaults did not disable the globe')
 }
+if (nodeFor('#serverMap').hidden) throw new Error('Restoring defaults must bring the world map back')
 
 nodeFor('.view-switch').dispatch('click', { target: { closest: () => ({ dataset: { view: 'table' } }) } })
 if (nodeFor('#tableView').hidden || !nodeFor('#gridView').hidden) throw new Error('Table view toggle failed')

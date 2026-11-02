@@ -42,6 +42,7 @@ test('toolbar keeps theme customization before authorization and drawer stays lo
   assert.match(home, /id="themeDrawer"/)
   assert.match(home, /id="themeTransparencyEnabled"[^>]+type="checkbox"/)
   assert.match(home, /id="themeGlobeEnabled"[^>]+type="checkbox"[^>]+role="switch"/)
+  assert.match(home, /id="themeMapEnabled"[^>]+type="checkbox"[^>]+role="switch"/)
   assert.match(home, /id="themeTransparencySoft"[^>]+type="radio"/)
   assert.match(home, /id="themeTransparencyGlass"[^>]+type="radio"/)
   assert.match(home, /id="themeTransparencyIntensity"[^>]+type="range"/)
@@ -80,6 +81,9 @@ test('overview defaults to six cards and keeps the optional globe outside the tw
   const tableIndex = home.indexOf('id="tableView"')
   const globeIndex = home.indexOf('id="serverGlobe"')
   assert.ok(globeIndex > 0 && globeIndex < gridIndex && globeIndex < tableIndex)
+  // komari-next: the flat world map sits between the status cards and the search controls.
+  const mapIndex = home.indexOf('id="serverMap"')
+  assert.ok(mapIndex > globeIndex && mapIndex < home.indexOf('class="dashboard-controls"'))
   assert.equal((home.match(/class="view-button/g) || []).length, 2)
   assert.deepEqual([...home.matchAll(/class="view-button[^>]+data-view="([^"]+)"/g)].map(match => match[1]), ['grid', 'table'])
 })
@@ -107,30 +111,27 @@ test('COBE is pinned and vendored locally with its license', async () => {
 test('enabled overview uses a consistent two-column by three-row card grid', async () => {
   const css = await readFile(resolve(root, 'src/assets/css/main.css'), 'utf8')
   const base = css.slice(css.indexOf('.overview-shell.is-globe-enabled .overview-grid'), css.indexOf('.overview-shell:not(.is-globe-enabled)'))
-  const at840 = css.slice(css.indexOf('@media (max-width: 840px)'), css.indexOf('@media (max-width: 560px)'))
-  const at560 = css.slice(css.indexOf('@media (max-width: 560px)'))
   assert.match(base, /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/)
-  assert.match(base, /grid-template-rows:\s*repeat\(3,\s*minmax\(110px,\s*1fr\)\)/)
-  assert.match(at560, /\.overview-shell\.is-globe-enabled \.overview-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,[^}]*grid-template-rows:\s*repeat\(3,\s*minmax\(102px,\s*auto\)\)/)
+  assert.match(base, /grid-template-rows:\s*repeat\(3,\s*minmax\(100px,\s*1fr\)\)/)
   assert.doesNotMatch(css, /\.overview-shell\.is-globe-enabled #currentTimeCard/)
   assert.doesNotMatch(css, /\.overview-shell\.is-globe-enabled \.overview-grid > \.overview-card:not\(#currentTimeCard\)/)
-  assert.match(css, /\.overview-grid\s*\{[^}]*grid-template-columns:\s*repeat\(6,/)
-  assert.match(at840, /\.overview-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/)
-  assert.match(at560, /\.overview-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/)
+  // komari-next breakpoints: 1 / 2 (sm) / 3 (lg) / 5 (xl) columns; six with the opt-in expiry card.
+  assert.match(css, /\.overview-grid\s*\{[^}]*grid-template-columns:\s*1fr/)
+  assert.match(css, /@media \(min-width: 640px\) \{ \.overview-grid \{ grid-template-columns: repeat\(2,/)
+  assert.match(css, /@media \(min-width: 1024px\) \{ \.overview-grid \{ grid-template-columns: repeat\(3,/)
+  assert.match(css, /@media \(min-width: 1280px\) \{ \.overview-grid \{ grid-template-columns: repeat\(5,[^}]*\} \.overview-grid\.has-expiry-card \{ grid-template-columns: repeat\(6,/)
   assert.doesNotMatch(css, /#currentTimeCard\s*\{[^}]*grid-column:/)
 })
 
-test('history timeline uses a dynamic number of equal tracks without clipped edge blocks', async () => {
+test('history strips use komari-next equal flex blocks', async () => {
   const css = await readFile(resolve(root, 'src/assets/css/main.css'), 'utf8')
   const timeline = css.match(/\.probe-timeline\s*\{([^}]+)\}/)?.[1] || ''
   const block = css.match(/\.probe-time-block\s*\{([^}]+)\}/)?.[1] || ''
 
-  assert.match(timeline, /display:\s*grid/)
-  assert.match(timeline, /grid-template-columns:\s*repeat\(var\(--probe-history-buckets,\s*24\),\s*minmax\(0,\s*1fr\)\)/)
-  assert.match(timeline, /padding:\s*0/)
-  assert.match(timeline, /overflow:\s*visible/)
-  assert.match(block, /width:\s*100%/)
-  assert.match(block, /height:\s*14px/)
-  assert.match(block, /box-sizing:\s*border-box/)
-  assert.match(block, /margin:\s*0/)
+  assert.match(timeline, /display:\s*flex/)
+  assert.match(timeline, /height:\s*20px/)
+  assert.match(timeline, /gap:\s*2px/)
+  assert.match(block, /flex:\s*1/)
+  assert.match(block, /min-width:\s*2px/)
+  assert.match(block, /border-radius:\s*2px/)
 })

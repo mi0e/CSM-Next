@@ -62,7 +62,7 @@ test('normalizeBillingCycle falls back to month', () => {
 test('formatBillingPrice renders new billing fields', () => {
   const server = { price: '30.00', currency: '¥', billing_cycle: 'month' }
   assert.equal(formatBillingPrice(server, 'zh'), '¥30.00/月')
-  assert.equal(formatBillingPrice(server, 'en'), '¥30.00/M')
+  assert.equal(formatBillingPrice(server, 'en'), '¥30.00/Monthly')
   assert.equal(formatBillingPrice({ price: '120.00', currency: '€', billing_cycle: 'year' }, 'zh'), '€120.00/年')
 })
 
@@ -76,7 +76,7 @@ test('formatBillingPrice renders free and unset prices', () => {
 
 test('formatBillingPrice stays compatible with legacy free text', () => {
   assert.equal(formatBillingPrice({ price: '￥30/月' }, 'zh'), '¥30.00/月')
-  assert.equal(formatBillingPrice({ price: '$24/Year' }, 'en'), '$24.00/Y')
+  assert.equal(formatBillingPrice({ price: '$24/Year' }, 'en'), '$24.00/Annual')
   // Explicit new fields win over nothing, legacy text wins over billing_cycle.
   assert.equal(formatBillingPrice({ price: '€22/Year', billing_cycle: 'month' }, 'zh'), '€22.00/年')
 })
