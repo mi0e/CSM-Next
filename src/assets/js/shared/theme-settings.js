@@ -1,6 +1,10 @@
 export const THEME_SETTINGS_DEFAULTS = Object.freeze({
   backgroundImage: '',
   globeEnabled: false,
+  // komari-next shows the flat world map by default (statusCardsVisibility.mapView).
+  mapEnabled: true,
+  // komari-next shows five status cards; the expiry card is CSM-Next's opt-in extra.
+  expiryCardEnabled: false,
   transparencyEnabled: false,
   transparencyMode: 'soft',
   panelOpacity: 1,
@@ -80,9 +84,17 @@ export function normalizeThemeSettings(value = {}, fallback = {}) {
   const globeEnabled = typeof value?.globeEnabled === 'boolean'
     ? value.globeEnabled
     : fallbackGlobeEnabled
+  const mapEnabled = typeof value?.mapEnabled === 'boolean'
+    ? value.mapEnabled
+    : typeof fallback?.mapEnabled === 'boolean' ? fallback.mapEnabled : THEME_SETTINGS_DEFAULTS.mapEnabled
+  const expiryCardEnabled = typeof value?.expiryCardEnabled === 'boolean'
+    ? value.expiryCardEnabled
+    : typeof fallback?.expiryCardEnabled === 'boolean' ? fallback.expiryCardEnabled : THEME_SETTINGS_DEFAULTS.expiryCardEnabled
   return {
     backgroundImage,
     globeEnabled,
+    mapEnabled,
+    expiryCardEnabled,
     transparencyEnabled,
     transparencyMode,
     panelOpacity,
@@ -125,6 +137,20 @@ export function validateThemeSettings(value) {
     throw error
   }
 
+  if (Object.hasOwn(value, 'mapEnabled') && typeof value.mapEnabled !== 'boolean') {
+    const error = new Error('Map enabled must be a boolean')
+    error.code = 'invalid_map_enabled'
+    error.field = 'mapEnabled'
+    throw error
+  }
+
+  if (Object.hasOwn(value, 'expiryCardEnabled') && typeof value.expiryCardEnabled !== 'boolean') {
+    const error = new Error('Expiry card enabled must be a boolean')
+    error.code = 'invalid_expiry_card_enabled'
+    error.field = 'expiryCardEnabled'
+    throw error
+  }
+
   if (Object.hasOwn(value, 'transparencyMode') && !transparencyModes.has(value.transparencyMode)) {
     const error = new Error(`Transparency mode must be one of: ${THEME_TRANSPARENCY_MODES.join(', ')}`)
     error.code = 'invalid_transparency_mode'
@@ -155,6 +181,8 @@ export function validateThemeSettings(value) {
   return {
     backgroundImage: backgroundImage ? safeThemeBackground(backgroundImage) : '',
     globeEnabled: normalized.globeEnabled,
+    mapEnabled: normalized.mapEnabled,
+    expiryCardEnabled: normalized.expiryCardEnabled,
     transparencyEnabled: normalized.transparencyEnabled,
     transparencyMode: normalized.transparencyMode,
     panelOpacity,

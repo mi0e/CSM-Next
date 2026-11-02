@@ -2,10 +2,11 @@ import { createRealtime, realtimeUrl } from './shared/realtime.js'
 import { patchElement } from './shared/patch-dom.js'
 import { getJwt, setJwt } from './shared/auth.js'
 import { originalAdminUrl, resolveAdminUrl } from './shared/admin.js'
-import { formatBillingPrice } from './shared/billing.js'
+import { formatBillingPrice, normalizePrice } from './shared/billing.js'
 import { escapeHtml } from './shared/dom.js'
 import { summarizeExpirations } from './shared/expiry.js'
 import { flagMarkup } from './shared/flags.js'
+import { osIconMarkup, osName } from './shared/os.js'
 import { fetchJson } from './shared/http.js'
 import {
   getLoginTurnstileToken, loginTurnstileRequired, loginWithCredentials, loadTurnstileScript,
@@ -19,10 +20,10 @@ import {
   normalizeThemeSettings, validateThemeSettings
 } from './shared/theme-settings.js'
 import {
-  mergeProbeHistory, normalizeProbeWindow, pingSparkline,
+  mergeProbeHistory, normalizeProbeHistory, normalizeProbeWindow,
   PROBE_HISTORY_BUCKETS, PROBE_HISTORY_HOURS, PROBE_LINES, summarizeProbeHistory
 } from './shared/probe-history.js'
-import { isPingValid, pingLevel, probeLines } from './shared/ping.js'
+import { isPingValid, probeLines } from './shared/ping.js'
 import { serverRouteHash } from './shared/route.js'
 import { injectedSiteTitle, resolveSiteTitle } from './shared/title.js'
 import { joinUrl, metaApiBases, metaContent, normalizeBase } from './shared/url.js'
@@ -46,11 +47,11 @@ const translations = {
     expirationUnavailable: '暂无到期信息',
     offline: '离线',
     online: '在线',
-    region: '区域',
+    region: '点亮地区',
     regionHint: '节点分布区域',
     trafficOverview: '流量概览',
-    networkSpeed: '网络速度',
-    searchPlaceholder: '按名称、区域或系统搜索节点…',
+    networkSpeed: '网络速率',
+    searchPlaceholder: '搜索节点名称、地区、系统...',
     grid: '网格',
     table: '表格',
     status: '状态',
@@ -67,7 +68,12 @@ const translations = {
     themeGroupBackground: '背景图片', themeGroupEffects: '界面效果', themeGroupAdvanced: '高级',
     themeBackground: '图片地址', themeBackgroundHint: '仅允许 HTTPS 图片地址；留空表示不使用背景图。跨域图片可能需要站长在上游后台 CSP 名单放行。',
     themeTransparency: '界面透明化', themeTransparencyHint: '独立控制卡片和顶部栏的透明效果。',
-    themeGlobe: '服务器地球仪', themeGlobeHint: '在首页概览旁显示交互式地球仪，并将六张卡片整理为紧凑布局。',
+    themeGlobe: '服务器地球仪', themeGlobeHint: '在首页概览旁显示交互式地球仪，并将状态卡片整理为紧凑布局。',
+    themeMap: '世界地图', themeMapHint: '在状态卡片下方显示节点分布地图（komari-next 默认开启）；启用地球仪时自动隐藏。',
+    mapLegendOnline: '全部在线', mapLegendPartial: '部分在线', mapLegendOffline: '全部离线',
+    mapStatus_online: '在线', mapStatus_offline: '离线', mapStatus_partial: '部分在线', mapNodes: '节点数',
+    mapUnmappedRegions: '未显示地区', mapUnmappedCount: '共 {count} 项', mapRegionUnknown: '未填写', mapAriaLabel: '全球节点分布地图',
+    themeExpiryCard: '即将到期卡片', themeExpiryCardHint: '在概览中额外显示 30 天内到期的节点数（komari-next 默认只有五张状态卡）。',
     themeTransparencyMode: '透明方案',
     themeTransparencySoft: '柔和透明', themeTransparencySoftHint: '仅透明，不模糊后方内容。',
     themeTransparencyGlass: '毛玻璃', themeTransparencyGlassHint: '透明并模糊后方内容。',
@@ -97,12 +103,15 @@ const translations = {
     preview: '预览数据',
     refreshing: '正在刷新',
     refreshed: '数据已刷新',
-    all: '全部',
+    all: '所有',
     unknown: '未知',
-    serversSummary: '{total} 台服务器，{online} 台在线',
-    noNodes: '没有匹配的节点',
-    noNodesHint: '请调整区域筛选或搜索关键词。',
-    noServerData: '暂时没有服务器数据',
+    serversSummary: '共 {total} 个服务器，{online} 个在线',
+    groupSummary: '{group} 分组: 共 {total} 个服务器，{online} 个服务器在线',
+    searchResults: '找到 {count} 个服务器，共 {total} 个',
+    clearRegion: '清除地区筛选',
+    noNodes: '未找到匹配的服务器',
+    noNodesHint: '尝试不同的搜索关键词',
+    noServerData: '暂无服务器数据',
     noServerDataHint: '请先在管理后台添加节点，或检查 API 地址配置。',
     loadFailedTitle: '无法读取监控数据',
     loadFailed: '请检查 apiBase 配置（meta 标签或同源部署）、后端 CORS 设置和站点公开状态。',
@@ -114,10 +123,13 @@ const translations = {
     verifyingSite: '正在验证站点 {current}/{total}',
     verifyFailed: '安全验证失败，请刷新页面重试。',
     loading: '正在载入数据',
-    netSpeed: '网络速度',
-    traffic: '流量',
-    pingStats: '探针状态',
-    latency: '延迟',
+    netSpeed: '网络',
+    traffic: '总流量',
+    pingStats: '延迟统计（{hours}h）',
+    latency: 'Latency',
+    loss: '丢包',
+    volatility: '波动',
+    noPingData: '无延迟数据',
     liveTrend: '实时趋势',
     historyLatency: '历史延迟',
     last24Hours: '过去 24 小时',
@@ -127,7 +139,9 @@ const translations = {
     trafficLimit: '流量限额',
     uptime: '运行',
     expired: '已到期',
-    days: '{count} 天',
+    days: '余{count}天',
+    longTerm: '长期',
+    nodeName: '节点名称', os: '操作系统', ram: '内存', price: '价格', totalTransfer: '总传输',
     dayShort: '天',
     hourShort: '时',
     minuteShort: '分',
@@ -152,7 +166,7 @@ const translations = {
     regionHint: 'Distributed regions',
     trafficOverview: 'Traffic Overview',
     networkSpeed: 'Network Speed',
-    searchPlaceholder: 'Search nodes by name, region, OS…',
+    searchPlaceholder: 'Search nodes by name, region, OS...',
     grid: 'Grid',
     table: 'Table',
     status: 'Status',
@@ -169,7 +183,12 @@ const translations = {
     themeGroupBackground: 'Background', themeGroupEffects: 'Interface effects', themeGroupAdvanced: 'Advanced',
     themeBackground: 'Image URL', themeBackgroundHint: 'HTTPS image URLs only. Leave empty for no background. Cross-origin images may need a CSP allowlist entry in the upstream admin.',
     themeTransparency: 'Interface transparency', themeTransparencyHint: 'Controls transparency for cards and the top bar independently.',
-    themeGlobe: 'Server globe', themeGlobeHint: 'Shows an interactive globe beside the overview and arranges all six cards in a compact layout.',
+    themeGlobe: 'Server globe', themeGlobeHint: 'Shows an interactive globe beside the overview and arranges the status cards in a compact layout.',
+    themeMap: 'World map', themeMapHint: 'Shows the node distribution map below the status cards (on by default in komari-next); hidden while the globe is enabled.',
+    mapLegendOnline: 'Fully online', mapLegendPartial: 'Partially online', mapLegendOffline: 'Fully offline',
+    mapStatus_online: 'Online', mapStatus_offline: 'Offline', mapStatus_partial: 'Partially online', mapNodes: 'Nodes',
+    mapUnmappedRegions: 'Unmapped Regions', mapUnmappedCount: 'Total {count} items', mapRegionUnknown: 'Not set', mapAriaLabel: 'Global node distribution map',
+    themeExpiryCard: 'Expiring-soon card', themeExpiryCardHint: 'Adds a card counting nodes that expire within 30 days (komari-next shows five status cards by default).',
     themeTransparencyMode: 'Transparency style',
     themeTransparencySoft: 'Soft', themeTransparencySoftHint: 'Transparent without blurring content behind it.',
     themeTransparencyGlass: 'Glass', themeTransparencyGlassHint: 'Transparent with background blur.',
@@ -202,9 +221,12 @@ const translations = {
     all: 'All',
     unknown: 'Unknown',
     serversSummary: '{total} servers total, {online} online',
-    noNodes: 'No matching nodes',
-    noNodesHint: 'Try another region or search phrase.',
-    noServerData: 'No server data yet',
+    groupSummary: '{group} group: total {total} servers, {online} servers online',
+    searchResults: 'Found {count} server out of {total}',
+    clearRegion: 'Clear region filter',
+    noNodes: 'No matching servers found',
+    noNodesHint: 'Try different search keywords',
+    noServerData: 'No server data available',
     noServerDataHint: 'Add a node in Admin or check the configured API endpoint.',
     loadFailedTitle: 'Unable to load monitoring data',
     loadFailed: 'Check the apiBase meta tag (or same-origin deploy), backend CORS settings, and public access.',
@@ -218,8 +240,11 @@ const translations = {
     loading: 'Loading data',
     netSpeed: 'Net Spd',
     traffic: 'Traffic',
-    pingStats: 'Probe Stats',
+    pingStats: 'Ping Stats ({hours}h)',
     latency: 'Latency',
+    loss: 'Loss',
+    volatility: 'Vol',
+    noPingData: 'No ping data',
     liveTrend: 'Live trend',
     historyLatency: 'Historical latency',
     last24Hours: 'Past 24 hours',
@@ -230,9 +255,11 @@ const translations = {
     uptime: 'up',
     expired: 'Expired',
     days: '{count} day',
-    dayShort: 'd',
+    longTerm: 'Long term',
+    nodeName: 'Node Name', os: 'OS', ram: 'RAM', price: 'Price', totalTransfer: 'Total Transfer',
+    dayShort: 'day',
     hourShort: 'h',
-    minuteShort: 'm',
+    minuteShort: 'min',
     secondShort: 's',
     justNow: 'just now',
     ago: '{value} ago',
@@ -263,6 +290,7 @@ function createState() {
     },
     regions: {},
     filter: 'all',
+    group: localStorage.getItem('nodeSelectedGroup') || 'all',
     query: '',
     view: localStorage.getItem('csm-next-view') || 'grid',
     language: localStorage.getItem('csm-next-language') || (navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'),
@@ -278,6 +306,8 @@ function createState() {
     onlineTimer: null,
     globe: null,
     globeGeneration: 0,
+    map: null,
+    mapMounting: false,
     loginSiteIndex: 0,
     loginBusy: false,
     loginTurnstileWidgetId: null,
@@ -288,6 +318,7 @@ function createState() {
     themeSettingsBusy: false,
     themeDrawerOpen: false,
     probeHistories: new Map(),
+    pingPopoverTimer: null,
     destroyed: false
   }
 }
@@ -295,7 +326,7 @@ function createState() {
 const queryElements = () => ({
   brandTitle: document.querySelector('#brandTitle'),
   siteEyebrow: document.querySelector('#siteEyebrow'),
-  footerAdminLink: document.querySelector('#footerAdminLink'),
+  adminLink: document.querySelector('#adminLink'),
   refreshButton: document.querySelector('#refreshButton'),
   themeButton: document.querySelector('#themeButton'),
   languageButton: document.querySelector('#languageButton'),
@@ -306,6 +337,7 @@ const queryElements = () => ({
   currentDate: document.querySelector('#currentDate'),
   serverGlobe: document.querySelector('#serverGlobe'),
   globeCanvas: document.querySelector('#serverGlobe canvas'),
+  serverMap: document.querySelector('#serverMap'),
   onlineCount: document.querySelector('#onlineCount'),
   totalCount: document.querySelector('#totalCount'),
   offlineCount: document.querySelector('#offlineCount'),
@@ -317,8 +349,12 @@ const queryElements = () => ({
   trafficDown: document.querySelector('#trafficDown'),
   speedUp: document.querySelector('#speedUp'),
   speedDown: document.querySelector('#speedDown'),
+  speedGauge: document.querySelector('#speedGauge'),
+  speedGaugeValue: document.querySelector('#speedGaugeValue'),
+  speedGaugeUnit: document.querySelector('#speedGaugeUnit'),
   liveState: document.querySelector('#liveState'),
   searchInput: document.querySelector('#searchInput'),
+  pingPopover: document.querySelector('#pingPopover'),
   clearSearch: document.querySelector('#clearSearch'),
   filterBar: document.querySelector('#filterBar'),
   serverSummary: document.querySelector('#serverSummary em'),
@@ -356,6 +392,9 @@ const queryElements = () => ({
   themeBackgroundImage: document.querySelector('#themeBackgroundImage'),
   themeTransparencyEnabled: document.querySelector('#themeTransparencyEnabled'),
   themeGlobeEnabled: document.querySelector('#themeGlobeEnabled'),
+  themeExpiryCardEnabled: document.querySelector('#themeExpiryCardEnabled'),
+  themeMapEnabled: document.querySelector('#themeMapEnabled'),
+  overviewGrid: document.querySelector('.overview-grid'),
   themeTransparencyOptions: document.querySelector('#themeTransparencyOptions'),
   themeTransparencySoft: document.querySelector('#themeTransparencySoft'),
   themeTransparencyGlass: document.querySelector('#themeTransparencyGlass'),
@@ -409,6 +448,17 @@ function formatBytes(value, digits = 2) {
   return `${Number(number.toFixed(precision))} ${units[index]}`
 }
 
+// komari-next formatSpeed: 0 decimals for B/KB or ≥ 100, 1 for GB+, else 2.
+function formatSpeed(value) {
+  const bytes = Number.parseFloat(value) || 0
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  if (bytes <= 0) return '0 B/s'
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  const size = bytes / (1024 ** index)
+  const decimals = size >= 100 || index <= 1 ? 0 : index >= 3 ? 1 : 2
+  return `${size.toFixed(decimals)} ${units[index]}/s`
+}
+
 function formatMetricMb(value) {
   return formatBytes((Number.parseFloat(value) || 0) * MB)
 }
@@ -445,48 +495,30 @@ function regionFlag(region, siteIndex = 0) {
   return flagMarkup(region, siteBaseFor(siteIndex))
 }
 
-function shortOs(value) {
-  const os = String(value || '').trim()
-  if (!os) return 'Unknown'
-  const known = ['Debian', 'Ubuntu', 'CentOS', 'AlmaLinux', 'Rocky', 'Fedora', 'Alpine', 'Arch', 'Windows', 'OpenWrt', 'FreeBSD']
-  const match = known.find(name => os.toLowerCase().includes(name.toLowerCase()))
-  return match || os.split(/[\s/]/)[0].slice(0, 16)
-}
-
+// komari-next formatUptime: spaced units, zero parts dropped.
 function formatUptime(server) {
   const boot = toTimestamp(server.boot_time)
   if (!boot || boot > Date.now()) return '—'
-  let seconds = Math.floor((Date.now() - boot) / 1000)
-  const days = Math.floor(seconds / 86400)
-  seconds %= 86400
-  const hours = Math.floor(seconds / 3600)
-  seconds %= 3600
-  const minutes = Math.floor(seconds / 60)
-  if (days > 0) return `${days}${t('dayShort')} ${hours}${t('hourShort')} ${minutes}${t('minuteShort')}`
-  if (hours > 0) return `${hours}${t('hourShort')} ${minutes}${t('minuteShort')}`
-  return `${minutes}${t('minuteShort')}`
+  const total = Math.floor((Date.now() - boot) / 1000)
+  const parts = [
+    [Math.floor(total / 86400), 'dayShort'],
+    [Math.floor((total % 86400) / 3600), 'hourShort'],
+    [Math.floor((total % 3600) / 60), 'minuteShort'],
+    [total % 60, 'secondShort']
+  ].filter(([value]) => value).map(([value, key]) => `${value} ${t(key)}`)
+  return parts.length ? parts.join(' ') : `0 ${t('secondShort')}`
 }
 
-function formatUpdated(value) {
-  const timestamp = toTimestamp(value)
-  if (!timestamp) return '—'
-  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
-  if (seconds < 10) return t('justNow')
-  if (seconds < 60) return t('ago', { value: `${seconds}${t('secondShort')}` })
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return t('ago', { value: `${minutes}${t('minuteShort')}` })
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return t('ago', { value: `${hours}${t('hourShort')}` })
-  return t('ago', { value: `${Math.floor(hours / 24)}${t('dayShort')}` })
-}
-
-function expiryLabel(value) {
-  if (!value) return ''
+// komari-next PriceTags expiry badge: red ≤ 7 days (incl. expired), orange ≤ 15, else green.
+function expiryBadge(value) {
+  if (!value) return null
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
+  if (Number.isNaN(date.getTime())) return null
   const days = Math.ceil((date.getTime() - Date.now()) / 86400000)
-  if (days < 0) return t('expired')
-  return t('days', { count: days })
+  const color = days <= 7 ? 'red' : days <= 15 ? 'orange' : 'green'
+  if (days <= 0) return { text: t('expired'), color }
+  if (days > 36500) return { text: t('longTerm'), color }
+  return { text: t('days', { count: days }), color }
 }
 
 function detailUrl(server) {
@@ -516,7 +548,7 @@ function showToast(message) {
 
 function applyTheme() {
   document.documentElement.dataset.theme = state.theme
-  elements.themeColor?.setAttribute('content', state.theme === 'dark' ? '#101216' : '#f8f9fb')
+  elements.themeColor?.setAttribute('content', state.theme === 'dark' ? '#0a0a0a' : '#f8f8f8')
   state.globe?.update({ theme: state.theme })
 }
 
@@ -576,10 +608,10 @@ function applyConfig() {
     : normalizeThemeSettings({}, { backgroundImage: state.config.backgroundImage, panelOpacity: 1 })
   state.themeSettings = applyThemeAppearance(appearance)
   const link = adminUrl()
-  elements.footerAdminLink.href = link
+  elements.adminLink.href = link
   const external = new URL(link, location.href).origin !== location.origin
-  elements.footerAdminLink.target = external ? '_blank' : ''
-  elements.footerAdminLink.rel = external ? 'noopener noreferrer' : ''
+  elements.adminLink.target = external ? '_blank' : ''
+  elements.adminLink.rel = external ? 'noopener noreferrer' : ''
   elements.authButton.hidden = state.preview
 }
 
@@ -788,6 +820,8 @@ function populateThemeSettingsForm() {
   if (!elements.themeSettingsForm) return
   elements.themeBackgroundImage.value = state.themeSettings.backgroundImage || ''
   elements.themeGlobeEnabled.checked = Boolean(state.themeSettings.globeEnabled)
+  elements.themeExpiryCardEnabled.checked = Boolean(state.themeSettings.expiryCardEnabled)
+  elements.themeMapEnabled.checked = Boolean(state.themeSettings.mapEnabled)
   elements.themeTransparencyEnabled.checked = Boolean(state.themeSettings.transparencyEnabled)
   elements.themeTransparencyGlass.checked = state.themeSettings.transparencyMode === 'glass'
   elements.themeTransparencySoft.checked = !elements.themeTransparencyGlass.checked
@@ -835,6 +869,8 @@ function themeSettingsFromForm() {
   return {
     backgroundImage: elements.themeBackgroundImage.value.trim(),
     globeEnabled: Boolean(elements.themeGlobeEnabled.checked),
+    expiryCardEnabled: Boolean(elements.themeExpiryCardEnabled.checked),
+    mapEnabled: Boolean(elements.themeMapEnabled.checked),
     transparencyEnabled: Boolean(elements.themeTransparencyEnabled.checked),
     transparencyMode: elements.themeTransparencyGlass.checked ? 'glass' : 'soft',
     panelOpacity: Number((1 - transparencyIntensity / 100).toFixed(2)),
@@ -1261,20 +1297,24 @@ function recomputeStats() {
   let globalSpeedIn = 0
   let globalSpeedOut = 0
 
+  const onlineRegions = new Set()
   for (const server of state.servers) {
-    if (isOnline(server, now)) online += 1
+    const region = String(server.region || 'XX').toUpperCase()
+    regions[region] = (regions[region] || 0) + 1
+    if (!isOnline(server, now)) continue
+    online += 1
+    onlineRegions.add(region)
     globalNetRx += Number.parseFloat(server.net_rx_monthly) || 0
     globalNetTx += Number.parseFloat(server.net_tx_monthly) || 0
     globalSpeedIn += Number.parseFloat(server.net_in_speed) || 0
     globalSpeedOut += Number.parseFloat(server.net_out_speed) || 0
-    const region = String(server.region || 'XX').toUpperCase()
-    regions[region] = (regions[region] || 0) + 1
   }
 
   state.stats = {
     total: state.servers.length,
     online,
     offline: state.servers.length - online,
+    onlineRegions: onlineRegions.size,
     expirations: summarizeExpirations(state.servers, state.siteConfigs, now),
     globalNetRx,
     globalNetTx,
@@ -1288,7 +1328,7 @@ function renderOverview() {
   elements.onlineCount.textContent = state.stats.online
   elements.totalCount.textContent = state.stats.total
   elements.offlineCount.textContent = state.stats.offline
-  elements.regionCount.textContent = Object.keys(state.regions).filter(region => region !== 'XX').length
+  elements.regionCount.textContent = state.stats.onlineRegions
   const expirations = state.stats.expirations
   elements.expiringCount.textContent = expirations.available ? expirations.upcoming : '—'
   elements.expirationHint.textContent = expirations.available
@@ -1298,31 +1338,59 @@ function renderOverview() {
   elements.expiringCard.classList.toggle('has-expired', expirations.expired > 0)
   elements.trafficUp.textContent = formatBytes(state.stats.globalNetTx)
   elements.trafficDown.textContent = formatBytes(state.stats.globalNetRx)
-  elements.speedUp.textContent = `${formatBytes(state.stats.globalSpeedOut)}/s`
-  elements.speedDown.textContent = `${formatBytes(state.stats.globalSpeedIn)}/s`
-  elements.serverSummary.textContent = t('serversSummary', { total: state.stats.total, online: state.stats.online })
+  elements.speedUp.textContent = `${formatSpeed(state.stats.globalSpeedOut)}`
+  elements.speedDown.textContent = `${formatSpeed(state.stats.globalSpeedIn)}`
+  const gauge = formatSpeed(Math.max(state.stats.globalSpeedOut, state.stats.globalSpeedIn)).match(/^([\d.]+)\s*(\S+?)(?:\/s)?$/)
+  elements.speedGaugeValue.textContent = gauge ? Math.round(Number(gauge[1])) : 0
+  elements.speedGaugeUnit.textContent = gauge ? gauge[2] : 'B'
+  elements.speedGauge.title = `↑ ${elements.speedUp.textContent} / ↓ ${elements.speedDown.textContent}`
+  renderSummary()
 }
 
+function serverGroups() {
+  return [...new Set(state.servers.map(server => String(server.server_group || '').trim()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right))
+}
+
+// komari-next NodeDisplay: group tabs (only when groups exist); the globe can add a region filter.
 function renderFilters() {
-  const entries = Object.entries(state.regions).sort(([left], [right]) => left.localeCompare(right))
-  const filters = [['all', state.stats.total], ...entries]
-  elements.filterBar.innerHTML = filters.map(([code, count]) => {
-    const active = state.filter === code
-    const label = code === 'all' ? t('all') : code === 'XX' ? t('unknown') : code
-    const icon = code === 'all' ? '<span class="filter-dot"></span>' : `<span class="flag">${regionFlag(code)}</span>`
-    return `<button class="filter-chip${active ? ' active' : ''}" type="button" data-filter="${escapeHtml(code)}" aria-pressed="${active}">${icon}<span>${escapeHtml(label)}</span><small>${count}</small></button>`
-  }).join('')
+  const groups = serverGroups()
+  if (state.group !== 'all' && !groups.includes(state.group)) state.group = 'all'
+  const tabs = groups.length ? [['all', t('all')], ...groups.map(group => [group, group])] : []
+  const region = state.filter === 'all' ? '' : `<button class="group-tab region-tab active" type="button" data-filter="all" title="${escapeHtml(t('clearRegion'))}"><span class="flag">${regionFlag(state.filter)}</span><span>${escapeHtml(state.filter === 'XX' ? t('unknown') : state.filter)}</span><span aria-hidden="true">×</span></button>`
+  elements.filterBar.hidden = !tabs.length && !region
+  elements.filterBar.innerHTML = tabs.map(([value, label]) => {
+    const active = state.group === value
+    return `<button class="group-tab${active ? ' active' : ''}" type="button" role="tab" data-group="${escapeHtml(value)}" aria-selected="${active}">${escapeHtml(label)}</button>`
+  }).join('') + region
+}
+
+function renderSummary() {
+  const servers = filteredServers()
+  const online = servers.filter(server => isOnline(server)).length
+  const text = state.query.trim()
+    ? t('searchResults', { count: servers.length, total: state.stats.total })
+    : state.group !== 'all'
+      ? t('groupSummary', { group: state.group, total: servers.length, online })
+      : t('serversSummary', { total: state.stats.total, online: state.stats.online })
+  elements.serverSummary.innerHTML = `<span></span>${escapeHtml(text)}`
 }
 
 function filteredServers() {
   const query = state.query.trim().toLowerCase()
-  return state.servers.filter(server => {
+  const servers = state.servers.filter(server => {
     const region = String(server.region || 'XX').toUpperCase()
     if (state.filter !== 'all' && region !== state.filter) return false
+    if (state.group !== 'all' && String(server.server_group || '').trim() !== state.group) return false
     if (!query) return true
-    return [server.name, server.region, server.os, server.arch, server.server_group, server.tags]
+    const status = isOnline(server) ? 'online 在线' : 'offline 离线'
+    return [server.name, server.region, server.os, server.arch, server.server_group, server.tags, server.price, status]
       .some(value => String(value || '').toLowerCase().includes(query))
   })
+  // komari sorts online nodes first; upstream order stands in for komari's weight.
+  return servers.map((server, index) => ({ server, index, online: isOnline(server) }))
+    .sort((left, right) => (right.online - left.online) || (left.index - right.index))
+    .map(item => item.server)
 }
 
 function formatProbeTime(value) {
@@ -1332,6 +1400,7 @@ function formatProbeTime(value) {
 }
 
 function updateGlobe() {
+  state.map?.update(state.servers)
   state.globe?.update({
     servers: state.servers,
     activeRegion: state.filter,
@@ -1340,7 +1409,42 @@ function updateGlobe() {
   })
 }
 
+// komari-next NodeMapView below the status cards; the opt-in globe replaces it.
+const mapVisible = () => Boolean(state.themeSettings.mapEnabled && !state.themeSettings.globeEnabled)
+
+async function syncServerMap() {
+  const enabled = mapVisible()
+  if (elements.serverMap) elements.serverMap.hidden = !enabled
+  if (!enabled) {
+    state.map?.destroy()
+    state.map = null
+    return
+  }
+  if (state.map || state.mapMounting) return
+  state.mapMounting = true
+  const owner = state
+  try {
+    const { mountServerMap } = await import('./shared/world-map.js')
+    const map = await mountServerMap({ root: elements.serverMap, t, flag: code => regionFlag(code), isOnline: server => isOnline(server) })
+    // Settings may have toggled while the map data loaded.
+    if (owner.destroyed || !mapVisible()) {
+      map.destroy()
+      return
+    }
+    state.map = map
+    map.update(state.servers)
+  } catch (error) {
+    console.error('[theme] world map unavailable', error)
+  } finally {
+    owner.mapMounting = false
+  }
+}
+
 async function syncOverviewMode() {
+  const expiryCard = Boolean(state.themeSettings.expiryCardEnabled)
+  if (elements.expiringCard) elements.expiringCard.hidden = !expiryCard
+  elements.overviewGrid?.classList?.toggle('has-expiry-card', expiryCard)
+  void syncServerMap()
   const enabled = Boolean(state.themeSettings.globeEnabled)
   const generation = ++state.globeGeneration
   elements.overviewShell?.classList?.toggle('is-globe-enabled', enabled)
@@ -1369,80 +1473,212 @@ async function syncOverviewMode() {
   }
 }
 
-function formatProbeValue(value) {
-  return isPingValid(value) ? `${Math.round(Number(value))} ms` : t('historyNoData')
+const LUCIDE = {
+  activity: '<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
+  up: '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+  down: '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
+  trend: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>'
 }
 
-function renderProbeTimeline(buckets, server) {
-  const lines = probeLines(server, state.sites[server._siteIndex]?.config, state.language)
-  return buckets.map((bucket, index) => {
-    const level = bucket.value === null ? 'missing' : (pingLevel(bucket.value) || 'good')
-    const probeValues = lines.flatMap(line => {
-      const value = bucket.probes?.[line.id]
-      return isPingValid(value) ? [`${line.label} ${formatProbeValue(value)}`] : []
-    })
-    const label = [
-      `${formatProbeTime(bucket.start)}–${formatProbeTime(bucket.end)}`,
-      formatProbeValue(bucket.value),
-      ...probeValues
-    ].join(' · ')
-    return `<span class="probe-time-block ${level}" data-probe-bucket="${index}" data-probe-level="${level}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"></span>`
+function lucide(name, className = '') {
+  return `<svg class="lucide${className ? ` ${className}` : ''}" viewBox="0 0 24 24" aria-hidden="true">${LUCIDE[name]}</svg>`
+}
+
+// komari-next badge.tsx colour tokens: [solid, text]; outline badges use solid at 12% / 32%.
+const BADGE_COLORS = {
+  ruby: ['#d64061', '#b12f4f'], gray: ['#6b7280', '#4b5563'], gold: ['#c28f0c', '#8a6700'],
+  bronze: ['#a56c52', '#7c4f3b'], brown: ['#8b5e3c', '#6b4528'], yellow: ['#d4a600', '#8a6a00'],
+  amber: ['#d97706', '#9a4b00'], orange: ['#f97316', '#c2410c'], tomato: ['#e14d2a', '#b9381b'],
+  red: ['#dc2626', '#b91c1c'], crimson: ['#c81e5b', '#a10f47'], pink: ['#db2777', '#b61f63'],
+  plum: ['#9333ea', '#7e22ce'], purple: ['#7c3aed', '#6d28d9'], violet: ['#8b5cf6', '#7c3aed'],
+  iris: ['#5b5bd6', '#4a4ac2'], indigo: ['#4f46e5', '#4338ca'], blue: ['#2563eb', '#1d4ed8'],
+  cyan: ['#0891b2', '#0e7490'], teal: ['#0f766e', '#115e59'], jade: ['#0f9f7a', '#0b7e61'],
+  green: ['#16a34a', '#15803d'], grass: ['#65a30d', '#4d7c0f'], lime: ['#84cc16', '#4d7c0f'],
+  mint: ['#10b981', '#0f8f65'], sky: ['#0ea5e9', '#0369a1']
+}
+const TAG_COLORS = Object.keys(BADGE_COLORS)
+
+function badgeMarkup(text, color = '', extraClass = '') {
+  const palette = BADGE_COLORS[color]
+  const style = palette
+    ? ` style="--badge-solid:${palette[0]};--badge-text:${palette[1]}"`
+    : ''
+  return `<span class="mini-badge${palette ? ' colored' : ''}${extraClass ? ` ${extraClass}` : ''}"${style}>${text}</span>`
+}
+
+function customTagsMarkup(tags) {
+  return String(tags || '').split(';').map(tag => tag.trim()).filter(Boolean).map((tag, index) => {
+    const match = tag.match(/<(\w+)>$/)
+    const color = match && BADGE_COLORS[match[1].toLowerCase()] ? match[1].toLowerCase() : TAG_COLORS[index % TAG_COLORS.length]
+    const text = match && BADGE_COLORS[match[1].toLowerCase()] ? tag.replace(/<\w+>$/, '').trim() : tag
+    return badgeMarkup(`<span class="badge-label" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`, color)
   }).join('')
 }
 
-function probeHistoryMarkup(server) {
-  const spec = probeHistorySpec(server)
-  if (!spec) {
-    const spark = pingSparkline(state.probeHistories.get(server._sourceKey) || [])
-    return {
-      label: t(spark ? 'liveTrend' : 'currentSamples'),
-      markup: spark
-        ? `<div class="ping-sparkline" title="${escapeHtml(`${t('latency')} ${Math.round(spark.min)}–${Math.round(spark.max)} ms`)}"><svg viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true"><polyline points="${spark.points}"/></svg></div>`
-        : ''
-    }
+// komari-next PriceTags: V4/V6 only render for nodes that carry billing info.
+function priceTagsMarkup(server, { showPrice, showExpire, showIp = true }) {
+  const hasBilling = normalizePrice(server.price) !== ''
+  const ipBadge = label => badgeMarkup(`<span class="ip-dot" aria-hidden="true"></span>${label}`, '', 'ip')
+  const badges = []
+  if (showIp && hasBilling && server.ip_v4 === '1') badges.push(ipBadge('V4'))
+  if (showIp && hasBilling && server.ip_v6 === '1') badges.push(ipBadge('V6'))
+  if (hasBilling && showPrice) {
+    const price = formatBillingPrice(server, state.language)
+    if (price) badges.push(badgeMarkup(`<span class="badge-label">${escapeHtml(price)}</span>`, 'iris'))
   }
-
-  const summary = summarizeProbeHistory(state.probeHistories.get(server._sourceKey) || [], {
-    hours: spec.hours,
-    bucketCount: spec.bucketCount
-  })
-  const average = summary.latency.average
-  const averageLabel = average === null
-    ? t('historyNoData')
-    : t('historyAverage', { value: Math.round(average) })
-  const historyLabel = spec.hours === PROBE_HISTORY_HOURS
-    ? t('last24Hours')
-    : t('historyWindow', { value: Math.round(spec.hours * 100) / 100 })
-  return {
-    label: historyLabel,
-    markup: `<div class="probe-history" data-probe-source="${spec.source}" data-probe-samples="${summary.latency.sampleCount}">
-        <div class="probe-history-meta"><span>${escapeHtml(t('historyLatency'))}</span><strong>${escapeHtml(averageLabel)}</strong></div>
-        <div class="probe-timeline" style="--probe-history-buckets:${spec.bucketCount}" role="img" aria-label="${escapeHtml(historyLabel)}">${renderProbeTimeline(summary.latency.buckets, server)}</div>
-      </div>`
-  }
+  const expiry = hasBilling && showExpire ? expiryBadge(server.expire_date) : null
+  if (expiry) badges.push(badgeMarkup(`<span class="badge-label">${escapeHtml(expiry.text)}</span>`, expiry.color))
+  return badges.join('') + customTagsMarkup(server.tags)
 }
 
-// Keep the upstream-style live values while reusing the compact latency window
-// already embedded in `/api/servers`; the dashboard never requests D1 history.
-function probeSectionMarkup(server) {
-  const lines = probeLines(server, state.sites[server._siteIndex]?.config, state.language)
-    .map(line => ({ ...line, value: server[line.ping] }))
-  if (!lines.length) return ''
-  const items = lines.map(line => {
-    const text = isPingValid(line.value) ? `${Number.parseInt(line.value, 10)} ms` : t('timeout')
-    const level = pingLevel(line.value)
-    return `<span class="ping-item"><span class="ping-line" title="${escapeHtml(line.label)}">${escapeHtml(line.label)}</span><b class="ping-value${level ? ` ${level}` : ''}">${escapeHtml(text)}</b></span>`
-  }).join('')
-  const history = probeHistoryMarkup(server)
-  return `<section class="probe-section">
-          <div class="probe-heading"><span>${t('pingStats')}</span><small>${escapeHtml(history.label)}</small></div>
-          <div class="ping-list">${items}</div>${history.markup}
-        </section>`
+// komari-next CircleChart: 90px ring, r=40, stroke 9; colour steps at 60 % and 80 %.
+function gaugeColor(value) {
+  return value >= 80 ? '#9333ea' : value >= 60 ? '#3b82f6' : '#60a5fa'
+}
+
+function ringSvg(value, radius, stroke) {
+  const circumference = 2 * Math.PI * radius
+  return `<svg class="gauge-svg" viewBox="0 0 100 100" aria-hidden="true"><circle class="gauge-track" cx="50" cy="50" r="${radius}" stroke-width="${stroke}"></circle><circle class="gauge-progress" cx="50" cy="50" r="${radius}" stroke-width="${stroke}" stroke="${gaugeColor(value)}" stroke-dasharray="${circumference.toFixed(2)}" stroke-dashoffset="${(circumference * (1 - value / 100)).toFixed(2)}"></circle></svg>`
 }
 
 function gaugeMarkup(label, value, detail) {
   const safe = clamp(value)
-  return `<div class="gauge-cell"><div class="gauge-ring" style="--gauge-value:${safe.toFixed(2)}"><svg class="gauge-svg" viewBox="0 0 64 64" aria-hidden="true"><circle class="gauge-track" cx="32" cy="32" r="25" pathLength="100"></circle><circle class="gauge-progress${safe <= 0 ? ' empty' : ''}" cx="32" cy="32" r="25" pathLength="100"></circle></svg><span>${Math.round(safe)}%</span></div><strong class="gauge-label">${escapeHtml(label)}</strong><small class="gauge-detail">${escapeHtml(detail)}</small></div>`
+  return `<div class="gauge-cell"><div class="gauge-ring">${ringSvg(safe, 40, 9)}<span>${Math.round(safe)}%</span></div><div class="gauge-label">${escapeHtml(label)}</div><div class="gauge-detail">${escapeHtml(detail)}</div></div>`
+}
+
+// komari-next quality-bars thresholds.
+function latencyTone(value) {
+  return value <= 80 ? 'good' : value <= 180 ? 'warn' : 'bad'
+}
+
+function lossTone(value) {
+  return value <= 1 ? 'good' : value <= 5 ? 'warn' : 'bad'
+}
+
+function quantile(sorted, q) {
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1))]
+}
+
+// komari "Vol" is each probe task's p99/p50 latency ratio, averaged across tasks.
+function pingVolatility(rows) {
+  const ratios = PROBE_LINES.map(line => rows
+    .map(row => Number(row[line.ping]))
+    .filter(value => isPingValid(value))
+    .sort((left, right) => left - right))
+    .filter(values => values.length >= 2)
+    .map(values => quantile(values, 0.99) / Math.max(quantile(values, 0.5), 1))
+  return ratios.length ? ratios.reduce((sum, value) => sum + value, 0) / ratios.length : null
+}
+
+function pingStripMarkup(label, value, buckets, metric) {
+  const blocks = buckets.map(({ bucket, index }) => {
+    const metricValue = metric === 'latency' ? bucket.value : bucket.lossValue
+    const tone = metricValue === null ? 'missing' : metric === 'latency' ? latencyTone(metricValue) : lossTone(metricValue)
+    const text = metricValue === null ? 'No data' : metric === 'latency' ? `${Math.round(metricValue)} ms` : `${metricValue.toFixed(1)}%`
+    const attribute = metric === 'latency' ? 'data-probe-bucket' : 'data-loss-bucket'
+    if (!bucket.start) return `<span class="probe-time-block ${tone}"></span>`
+    return `<span class="probe-time-block ${tone}" ${attribute}="${index}" title="${escapeHtml(`${formatProbeTime(bucket.start)} ${text}`)}"></span>`
+  }).join('')
+  return `<div class="ping-strip"><div class="ping-strip-head"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div><div class="probe-timeline">${blocks}</div></div>`
+}
+
+// komari-next PING_HISTORY_PLACEHOLDER_POINTS: 28 muted blocks while history is not available yet.
+const PING_PLACEHOLDER_BUCKETS = Array.from({ length: 28 }, (_, index) => ({ bucket: { start: 0, value: null, lossValue: null }, index }))
+
+function probeSectionMarkup(server) {
+  const windowSpec = probeHistorySpec(server)
+  const spec = windowSpec || { hours: PROBE_HISTORY_HOURS, bucketCount: PROBE_HISTORY_BUCKETS, source: 'session' }
+  const rows = state.probeHistories.get(server._sourceKey) || []
+  const summary = summarizeProbeHistory(rows, { hours: spec.hours, bucketCount: spec.bucketCount })
+  // Without an upstream latency window, history only grows from live samples: until there are two,
+  // this is komari's "not loaded" state ("--" + placeholders), not "no ping data".
+  const loaded = Boolean(windowSpec) || rows.length >= 2
+  const hasData = loaded && summary.latency.average !== null
+  const volatility = pingVolatility(rows)
+  const status = hasData ? `${(volatility ?? 0).toFixed(1)} ${t('volatility')}` : loaded ? t('noPingData') : '--'
+  // Like komari, buckets without latency are dropped once data has loaded.
+  const buckets = summary.latency.buckets
+    .map((bucket, index) => ({ bucket: { ...bucket, lossValue: summary.loss.buckets[index]?.value ?? null }, index }))
+    .filter(({ bucket }) => bucket.value !== null)
+  const strips = hasData
+    ? `<div class="ping-strips" data-probe-source="${spec.source}">${pingStripMarkup(t('latency'), `${Math.round(summary.latency.average)} ms`, buckets, 'latency')}${pingStripMarkup(t('loss'), summary.loss.average === null ? '--%' : `${summary.loss.average.toFixed(1)}%`, buckets, 'loss')}</div>`
+    : loaded
+      ? ''
+      : `<div class="ping-strips is-placeholder">${pingStripMarkup(t('latency'), '-- ms', PING_PLACEHOLDER_BUCKETS, 'latency')}${pingStripMarkup(t('loss'), '--%', PING_PLACEHOLDER_BUCKETS, 'loss')}</div>`
+  const hours = Math.round(spec.hours * 100) / 100
+  return `<section class="probe-section"><div class="probe-heading"><span>${escapeHtml(t('pingStats', { hours }))}</span><small>${escapeHtml(status)}</small></div>${strips}</section>`
+}
+
+// komari-next formatTrafficPercentage
+function formatTrafficPercentage(value) {
+  if (!Number.isFinite(value) || value <= 0) return '0%'
+  if (value >= 10) return `${value.toFixed(1)}%`
+  if (value >= 1) return `${value.toFixed(2)}%`
+  if (value >= 0.01) return `${value.toFixed(3)}%`
+  return '<0.01%'
+}
+
+function trafficLimitType(server) {
+  return server.traffic_calc_type === 'dl' ? 'DOWN' : server.traffic_calc_type === 'ul' ? 'UP' : 'SUM'
+}
+
+// komari-next MiniPingChart palette and MiniPingChartFloat popover (600 px, click or 3 s hover).
+const PING_COLORS = ['#F38181', '#347433', '#898AC4', '#03A6A1', '#7AD6F0', '#B388FF', '#FF8A65', '#FFD600']
+
+function pingChartMarkup(server) {
+  const hours = probeHistorySpec(server)?.hours || PROBE_HISTORY_HOURS
+  const end = Date.now()
+  const start = end - hours * 3600000
+  const rows = normalizeProbeHistory(state.probeHistories.get(server._sourceKey) || [])
+    .filter(row => row.timestamp >= start)
+    .sort((left, right) => left.timestamp - right.timestamp)
+  const lines = probeLines(server, state.sites[server._siteIndex]?.config, state.language)
+    .map((line, index) => ({
+      ...line,
+      color: PING_COLORS[index % PING_COLORS.length],
+      points: rows.filter(row => isPingValid(row[line.ping])).map(row => [row.timestamp, Number(row[line.ping])])
+    }))
+    .filter(line => line.points.length)
+  const title = `<div class="ping-popover-title">${escapeHtml(server.name || server.id)}<small>${escapeHtml(t('pingStats', { hours: Math.round(hours * 100) / 100 }))}</small></div>`
+  if (!lines.length) return `${title}<div class="ping-popover-empty">${escapeHtml(t('noPingData'))}</div>`
+  const width = 560
+  const height = 220
+  const pad = { left: 36, right: 8, top: 8, bottom: 20 }
+  const max = Math.max(1, ...lines.flatMap(line => line.points.map(point => point[1]))) * 1.1
+  const x = time => pad.left + (time - start) / (end - start) * (width - pad.left - pad.right)
+  const y = value => pad.top + (1 - value / max) * (height - pad.top - pad.bottom)
+  const grid = [0, 0.25, 0.5, 0.75, 1].map(ratio => {
+    const value = max * ratio
+    return `<line x1="${pad.left}" x2="${width - pad.right}" y1="${y(value).toFixed(1)}" y2="${y(value).toFixed(1)}"></line><text x="${pad.left - 6}" y="${(y(value) + 3).toFixed(1)}" text-anchor="end">${Math.round(value)}</text>`
+  }).join('')
+  const paths = lines.map(line => `<polyline points="${line.points.map(([time, value]) => `${x(time).toFixed(1)},${y(value).toFixed(1)}`).join(' ')}" stroke="${line.color}"></polyline>`).join('')
+  const axis = `<text x="${pad.left}" y="${height - 4}">${escapeHtml(formatProbeTime(start))}</text><text x="${width - pad.right}" y="${height - 4}" text-anchor="end">${escapeHtml(formatProbeTime(end))}</text>`
+  const legend = lines.map(line => `<span><i style="background:${line.color}"></i>${escapeHtml(line.label)}</span>`).join('')
+  return `${title}<svg class="ping-popover-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(t('latency'))}"><g class="ping-popover-grid">${grid}</g>${paths}<g class="ping-popover-axis">${axis}</g></svg><div class="ping-popover-legend">${legend}</div>`
+}
+
+function closePingPopover() {
+  clearTimeout(state.pingPopoverTimer)
+  if (!elements.pingPopover || elements.pingPopover.hidden) return
+  elements.pingPopover.hidden = true
+  elements.pingPopover.dataset.serverKey = ''
+}
+
+function openPingPopover(button) {
+  const server = findServer(button?.dataset?.pingPopover)
+  const popover = elements.pingPopover
+  if (!server || !popover) return
+  popover.innerHTML = pingChartMarkup(server)
+  popover.dataset.serverKey = server._sourceKey
+  popover.hidden = false
+  const rect = button.getBoundingClientRect()
+  const width = Math.min(600, window.innerWidth - 16)
+  const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.left + rect.width / 2 - width / 2))
+  const below = rect.bottom + 5
+  const height = popover.offsetHeight || 320
+  popover.style.width = `${width}px`
+  popover.style.left = `${left}px`
+  popover.style.top = `${below + height > window.innerHeight - 8 ? Math.max(8, rect.top - 5 - height) : below}px`
 }
 
 function cardMarkup(server) {
@@ -1452,33 +1688,27 @@ function cardMarkup(server) {
   const disk = percentage(Number.parseFloat(server.disk_used) || 0, Number.parseFloat(server.disk_total) || 0)
   const limit = parseTrafficLimit(server.traffic_limit)
   const used = trafficUsed(server)
-  const quotaPercent = percentage(used, limit)
   const siteConfig = state.siteConfigs[server._siteIndex] || {}
-  const showPrice = siteConfig.show_price !== false
-  const showExpire = siteConfig.show_expire !== false
   const showTraffic = siteConfig.show_tf !== false
-  const badges = []
-  if (server.ip_v4 === '1' && server.ip_v6 === '1') badges.push('<span class="mini-badge">V4 / V6</span>')
-  else {
-    if (server.ip_v4 === '1') badges.push('<span class="mini-badge">V4</span>')
-    if (server.ip_v6 === '1') badges.push('<span class="mini-badge">V6</span>')
-  }
-  const priceText = showPrice ? formatBillingPrice(server, state.language) : ''
-  if (priceText) badges.push(`<span class="mini-badge price">${escapeHtml(priceText)}</span>`)
-  const expiry = showExpire ? expiryLabel(server.expire_date) : ''
-  if (expiry) badges.push(`<span class="mini-badge expire">${escapeHtml(expiry)}</span>`)
+  const tags = priceTagsMarkup(server, { showPrice: siteConfig.show_price !== false, showExpire: siteConfig.show_expire !== false })
+  const quotaPercent = limit > 0 ? used / limit * 100 : 0
   const quota = showTraffic && limit > 0
-    ? `<div class="quota"><div class="quota-head"><span>${t('trafficLimit')}</span><span>${formatBytes(used)} / ${formatBytes(limit)}</span></div><div class="quota-track"><div class="quota-fill" style="width:${quotaPercent.toFixed(2)}%"></div></div><div class="quota-percent">${quotaPercent.toFixed(1)}%</div></div>`
+    ? `<div class="quota"><div class="quota-head"><span>${trafficLimitType(server)} Limit</span><span>${formatBytes(used)} / ${formatBytes(limit)}</span></div><div class="quota-track"><div class="quota-fill" style="transform:scaleX(${(Math.min(quotaPercent, 100) / 100).toFixed(4)})"></div></div><div class="quota-percent">${formatTrafficPercentage(quotaPercent)}</div></div>`
     : ''
+  const base = siteBaseFor(server._siteIndex)
 
   return `<article class="server-card${online ? '' : ' offline'}" tabindex="0" role="link" data-server-key="${escapeHtml(server._sourceKey)}" aria-label="${escapeHtml(server.name)}">
     <header class="server-card-header">
-      <div class="server-card-top">
-        <div class="server-identity"><span class="server-flag" aria-hidden="true">${regionFlag(server.region, server._siteIndex)}</span><span class="server-name">${escapeHtml(server.name || server.id)}</span></div>
-        <div class="server-card-actions"><svg class="trend-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16 5-5 4 3 7-7"/><path d="M15 7h5v5"/></svg><span class="status-pill${online ? '' : ' offline'}">${online ? t('online') : t('offline')}</span></div>
+      <span class="server-flag" aria-hidden="true">${regionFlag(server.region, server._siteIndex)}</span>
+      <div class="server-heading">
+        <div class="server-title-row">
+          <h3 class="server-name">${escapeHtml(server.name || server.id)}</h3>
+          <div class="server-card-actions"><button class="trend-button" type="button" data-ping-popover="${escapeHtml(server._sourceKey)}" aria-label="${escapeHtml(t('pingStats', { hours: Math.round((probeHistorySpec(server)?.hours || PROBE_HISTORY_HOURS) * 100) / 100 }))}">${lucide('trend')}</button><span class="status-pill${online ? '' : ' offline'}">${online ? t('online') : t('offline')}</span></div>
+        </div>
+        <div class="server-subline"><span class="os-chip">${osIconMarkup(server.os, base)}<span>${escapeHtml(osName(server.os))}</span></span><span class="subline-divider">•</span><span class="uptime-text">${escapeHtml(formatUptime(server))}</span></div>
       </div>
-      <div class="server-subline"><span class="os-chip">${escapeHtml(shortOs(server.os))}</span><span class="subline-divider">·</span><span class="uptime-text">${t('uptime')} ${escapeHtml(formatUptime(server))}</span></div>
     </header>
+    <div class="card-separator"></div>
     <div class="server-card-content">
       <div class="gauge-grid">
         ${gaugeMarkup('CPU', cpu, `${cpu.toFixed(1)}%`)}
@@ -1486,70 +1716,66 @@ function cardMarkup(server) {
         ${gaugeMarkup('Disk', disk, formatMetricMb(server.disk_used))}
       </div>
       <div class="metrics-panel">
-        <div class="metric-row"><span class="metric-name network">${t('netSpeed')}</span><span class="metric-values"><span class="up">↑ ${formatBytes(server.net_out_speed)}/s</span><span class="down">↓ ${formatBytes(server.net_in_speed)}/s</span></span></div>
-        <div class="metric-row"><span class="metric-name">${t('traffic')}</span><span class="metric-values"><span>↑ ${formatBytes(server.net_tx_monthly)}</span><span>↓ ${formatBytes(server.net_rx_monthly)}</span></span></div>
+        <div class="metric-row"><span class="metric-name">${lucide('activity')}${t('netSpeed')}</span><span class="metric-values"><span class="up">${lucide('up')}${formatBytes(server.net_out_speed)}/s</span><span class="down">${lucide('down')}${formatBytes(server.net_in_speed)}/s</span></span></div>
+        <div class="metric-separator"></div>
+        <div class="metric-row"><span class="metric-name">${t('traffic')}</span><span class="metric-values muted"><span>${lucide('up')}${formatBytes(server.net_tx_monthly)}</span><span>${lucide('down')}${formatBytes(server.net_rx_monthly)}</span></span></div>
+        <div class="metric-separator"></div>
         ${probeSectionMarkup(server)}
         ${quota}
       </div>
     </div>
-    ${badges.length ? `<footer class="server-card-footer">${badges.join('')}</footer>` : ''}
+    ${tags ? `<footer class="server-card-footer">${tags}</footer>` : ''}
   </article>`
 }
 
 function emptyMarkup(hasAnyServers) {
   const title = hasAnyServers ? t('noNodes') : t('noServerData')
-  const hint = hasAnyServers ? t('noNodesHint') : t('noServerDataHint')
-  return `<div class="empty-state"><div><span class="empty-icon">⌁</span><strong>${escapeHtml(title)}</strong><p>${escapeHtml(hint)}</p></div></div>`
+  const hint = hasAnyServers ? `<p>${escapeHtml(t('noNodesHint'))}</p>` : ''
+  return `<div class="empty-state"><strong>${escapeHtml(title)}</strong>${hint}</div>`
 }
 
 function renderCards(changed = null) {
   const servers = filteredServers()
+  renderSummary()
   const nodes = changed && [...document.querySelectorAll('.server-card[data-server-key]')]
-  if (nodes?.length && nodes.length === servers.length) {
+  if (nodes?.length && nodes.length === servers.length && nodes.every((node, index) => node.dataset.serverKey === servers[index]._sourceKey)) {
     const byKey = new Map(servers.map(server => [server._sourceKey, server]))
-    if (nodes.every(node => byKey.has(node.dataset.serverKey))) {
-      nodes.forEach(node => { if (changed.has(node.dataset.serverKey)) patchElement(node, cardMarkup(byKey.get(node.dataset.serverKey))) })
-      return
-    }
-  }
-  if (!servers.length) {
-    elements.cardGroups.innerHTML = emptyMarkup(state.servers.length > 0)
+    nodes.forEach(node => { if (changed.has(node.dataset.serverKey)) patchElement(node, cardMarkup(byKey.get(node.dataset.serverKey))) })
     return
   }
-
-  const groups = new Map()
-  for (const server of servers) {
-    const name = String(server.server_group || 'Default')
-    if (!groups.has(name)) groups.set(name, [])
-    groups.get(name).push(server)
-  }
-  const showGroupTitles = groups.size > 1
-  elements.cardGroups.innerHTML = [...groups.entries()].map(([name, groupServers]) => `
-    <section class="server-group">
-      ${showGroupTitles ? `<h2 class="group-title">${escapeHtml(name)}<small>${groupServers.length}</small></h2>` : ''}
-      <div class="server-grid">${groupServers.map(cardMarkup).join('')}</div>
-    </section>`).join('')
+  elements.cardGroups.innerHTML = servers.length
+    ? `<div class="server-grid">${servers.map(cardMarkup).join('')}</div>`
+    : emptyMarkup(state.servers.length > 0)
 }
 
-function meterMarkup(value) {
+function tableRingMarkup(value, detail = '') {
   const safe = clamp(value)
-  return `<span class="table-meter"><i style="--value:${safe.toFixed(2)}"></i><span>${safe.toFixed(1)}%</span></span>`
+  return `<div class="table-ring"><div class="table-ring-chart">${ringSvg(safe, 40, 10)}<span>${Math.round(safe)}%</span></div>${detail ? `<small>${escapeHtml(detail)}</small>` : ''}</div>`
 }
 
 function tableRowMarkup(server) {
   const online = isOnline(server)
   const ram = percentage(Number(server.ram_used), Number(server.ram_total))
   const disk = percentage(Number(server.disk_used), Number(server.disk_total))
-  return `<tr tabindex="0" data-server-key="${escapeHtml(server._sourceKey)}">
-      <td><span class="table-status${online ? '' : ' offline'}">${online ? t('online') : t('offline')}</span></td>
-      <td><span class="table-node"><span class="table-flag" aria-hidden="true">${regionFlag(server.region, server._siteIndex)}</span>${escapeHtml(server.name || server.id)}</span></td>
-      <td>${escapeHtml(String(server.region || 'XX').toUpperCase())}</td>
-      <td>${escapeHtml(`${shortOs(server.os)} / ${server.arch || 'N/A'}`)}</td>
-      <td>${meterMarkup(server.cpu)}</td>
-      <td>${meterMarkup(ram)}</td>
-      <td>${meterMarkup(disk)}</td>
-      <td><span class="up">↑ ${formatBytes(server.net_out_speed)}/s</span><br><span class="down">↓ ${formatBytes(server.net_in_speed)}/s</span></td>
-      <td>${escapeHtml(formatUpdated(server.last_updated))}</td>
+  const siteConfig = state.siteConfigs[server._siteIndex] || {}
+  const limit = parseTrafficLimit(server.traffic_limit)
+  const used = trafficUsed(server)
+  const percent = limit > 0 ? used / limit * 100 : 0
+  const transfer = limit > 0 && siteConfig.show_tf !== false
+    ? `<div class="table-transfer"><div><span>${trafficLimitType(server)} Limit</span><span>${formatTrafficPercentage(percent)}</span></div><i><b style="width:${Math.min(percent, 100).toFixed(2)}%"></b></i><small>${formatBytes(used)} / ${formatBytes(limit)}</small></div>`
+    : `<span class="table-mono">${formatBytes((Number.parseFloat(server.net_tx_monthly) || 0) + (Number.parseFloat(server.net_rx_monthly) || 0))}</span>`
+  // The table's 价格 column keeps only price + expiry on one line; V4/V6 stay on the cards.
+  const tags = priceTagsMarkup(server, { showPrice: siteConfig.show_price !== false, showExpire: siteConfig.show_expire !== false, showIp: false })
+  return `<tr tabindex="0" class="${online ? '' : 'offline'}" data-server-key="${escapeHtml(server._sourceKey)}">
+      <td><span class="table-node"><span class="table-flag" aria-hidden="true">${regionFlag(server.region, server._siteIndex)}</span><span class="table-node-text"><strong>${escapeHtml(server.name || server.id)}</strong><small>${escapeHtml(online ? formatUptime(server) : t('offline'))}</small></span></span></td>
+      <td><span class="table-os" title="${escapeHtml(osName(server.os))}">${osIconMarkup(server.os, siteBaseFor(server._siteIndex))}</span></td>
+      <td><span class="table-status${online ? '' : ' offline'}"><i aria-hidden="true"></i>${online ? t('online') : t('offline')}</span></td>
+      <td>${tableRingMarkup(server.cpu)}</td>
+      <td>${tableRingMarkup(ram, formatMetricMb(server.ram_used))}</td>
+      <td>${tableRingMarkup(disk, formatMetricMb(server.disk_used))}</td>
+      <td><div class="table-tags">${tags}</div></td>
+      <td><span class="table-mono table-speed"><span class="up">↑ ${formatBytes(server.net_out_speed)}/s</span><span class="down">↓ ${formatBytes(server.net_in_speed)}/s</span></span></td>
+      <td>${transfer}</td>
     </tr>`
 }
 
@@ -1738,6 +1964,7 @@ function bindEvents() {
   })
   addGlobalListener(document, 'error', event => {
     const image = event.target
+    if (image?.classList?.contains('os-icon')) { image.hidden = true; return }
     if (!image?.classList?.contains('region-flag')) return
     image.hidden = true
     const fallback = image.nextElementSibling
@@ -1795,10 +2022,23 @@ function bindEvents() {
     renderCards()
     renderTable()
   })
+  // komari-next: "/" focuses the search box, Esc clears it.
+  addGlobalListener(document, 'keydown', event => {
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName || '') || event.target?.isContentEditable
+    if (event.key === '/' && !typing) {
+      event.preventDefault()
+      elements.searchInput.focus()
+    } else if (event.key === 'Escape' && event.target === elements.searchInput && state.query) {
+      elements.clearSearch.click()
+    }
+  })
   elements.filterBar.addEventListener('click', event => {
-    const button = event.target.closest('[data-filter]')
+    const button = event.target.closest('[data-group], [data-filter]')
     if (!button) return
-    state.filter = button.dataset.filter
+    if (button.dataset.group !== undefined) {
+      state.group = button.dataset.group
+      localStorage.setItem('nodeSelectedGroup', state.group)
+    } else state.filter = button.dataset.filter
     renderFilters()
     renderCards()
     renderTable()
@@ -1813,8 +2053,34 @@ function bindEvents() {
     else renderTable()
     renderViews()
   })
-  elements.cardGroups.addEventListener('click', event => openServerFromElement(event.target.closest('[data-server-key]')))
+  elements.cardGroups.addEventListener('click', event => {
+    const trigger = event.target.closest('[data-ping-popover]')
+    if (trigger?.dataset?.pingPopover) {
+      event.stopPropagation?.()
+      const open = !elements.pingPopover.hidden && elements.pingPopover.dataset.serverKey === trigger.dataset.pingPopover
+      if (open) closePingPopover()
+      else openPingPopover(trigger)
+      return
+    }
+    openServerFromElement(event.target.closest('[data-server-key]'))
+  })
+  elements.cardGroups.addEventListener('mouseover', event => {
+    const trigger = event.target.closest('[data-ping-popover]')
+    if (!trigger?.dataset?.pingPopover || trigger.contains?.(event.relatedTarget)) return
+    clearTimeout(state.pingPopoverTimer)
+    state.pingPopoverTimer = setTimeout(() => openPingPopover(trigger), 3000)
+  })
+  elements.cardGroups.addEventListener('mouseout', event => {
+    const trigger = event.target.closest('[data-ping-popover]')
+    if (trigger?.dataset?.pingPopover && !trigger.contains?.(event.relatedTarget)) clearTimeout(state.pingPopoverTimer)
+  })
+  addGlobalListener(document, 'click', event => {
+    if (!elements.pingPopover?.contains(event.target)) closePingPopover()
+  })
+  addGlobalListener(document, 'keydown', event => { if (event.key === 'Escape') closePingPopover() })
+  addGlobalListener(window, 'scroll', closePingPopover, { passive: true })
   elements.cardGroups.addEventListener('keydown', event => {
+    if (event.target.closest?.('[data-ping-popover]')?.dataset?.pingPopover) return
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
       openServerFromElement(event.target.closest('[data-server-key]'))
@@ -1898,11 +2164,14 @@ function destroy() {
   state.destroyed = true
   closeSockets()
   clearTimeout(state.renderTimer)
+  clearTimeout(state.pingPopoverTimer)
   clearInterval(state.refreshTimer)
   clearInterval(state.onlineTimer)
   state.globe?.destroy()
   state.globe = null
   state.globeGeneration += 1
+  state.map?.destroy()
+  state.map = null
   clearTimeout(showToast.timer)
   destroyLoginTurnstile()
   document.body.classList.remove('theme-drawer-open')

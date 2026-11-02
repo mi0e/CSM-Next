@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="description" content="CSM-Next：CF-Server-Monitor 独立前端主题">
     <meta name="color-scheme" content="light dark">
-    <meta name="theme-color" content="#f8f9fb">
+    <meta name="theme-color" content="#f8f8f8">
     <!-- 上游静态主题约定：独立静态部署时从此 meta 读取后端地址，多个用英文逗号分隔；主题商店（同源）部署留空即可 -->
     <!-- <meta name="apiBase" content="https://your-worker.example.com"> -->
     <title>Server Monitor</title>
@@ -40,6 +40,9 @@
             <button id="themeSettingsButton" class="icon-button" type="button" data-i18n-title="themeCustomize" title="主题自定义">
               <svg class="lucide-icon" data-lucide="palette" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/></svg>
             </button>
+            <a id="adminLink" class="icon-button" href="#/" data-i18n-title="admin" title="管理后台">
+              <svg class="lucide-icon" data-lucide="settings" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>
+            </a>
             <button id="authButton" class="icon-button" type="button" data-i18n-title="authorize" title="登录授权">
               <svg class="lucide-icon" data-lucide="circle-user-round" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.925 20.056a6 6 0 0 0-11.851.001"/><circle cx="12" cy="11" r="4"/><circle cx="12" cy="12" r="10"/></svg>
             </button>
@@ -65,7 +68,7 @@
               <span data-i18n="currentOnline">当前在线</span>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>
             </div>
-            <strong><span id="onlineCount">-</span> <i>/</i> <span id="totalCount">-</span></strong>
+            <strong><span id="onlineCount">-</span> / <span id="totalCount">-</span></strong>
             <small><span id="offlineCount">-</span> <span data-i18n="offline">离线</span></small>
           </article>
 
@@ -92,11 +95,13 @@
               <span data-i18n="networkSpeed">网络速度</span>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 3-6 10h5l-1 8 6-10h-5l1-8Z"/></svg>
             </div>
-            <strong class="overview-line"><b class="up">↑</b><span id="speedUp">-</span></strong>
-            <strong class="overview-line"><b class="down">↓</b><span id="speedDown">-</span></strong>
+            <div id="speedGauge" class="speed-gauge">
+              <div class="speed-gauge-arc"><i class="speed-gauge-fill"></i><span class="speed-gauge-center"><strong id="speedGaugeValue">0</strong><small id="speedGaugeUnit">B</small></span></div>
+              <span class="visually-hidden">↑ <span id="speedUp">-</span> / ↓ <span id="speedDown">-</span></span>
+            </div>
             </article>
 
-            <article id="expiringCard" class="overview-card overview-card-expiry">
+            <article id="expiringCard" class="overview-card overview-card-expiry" hidden>
               <div class="overview-label">
                 <span data-i18n="expiringSoon">即将到期</span>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18M12 14v3"/><path d="M12 19h.01"/></svg>
@@ -132,27 +137,45 @@
           </section>
         </section>
 
+        <section id="serverMap" class="node-map-view" aria-label="全球分布" hidden>
+          <div class="node-map-view__surface">
+            <div class="node-map-view__svg-host" data-map-svg></div>
+            <div class="node-map-view__legend">
+              <div class="node-map-view__legend-card node-map-view__legend-card--status">
+                <div class="node-map-view__legend-items">
+                  <span class="node-map-view__legend-item"><span class="node-map-view__legend-dot status-online"></span><span data-i18n="mapLegendOnline">全部在线</span></span>
+                  <span class="node-map-view__legend-item"><span class="node-map-view__legend-dot status-partial"></span><span data-i18n="mapLegendPartial">部分在线</span></span>
+                  <span class="node-map-view__legend-item"><span class="node-map-view__legend-dot status-offline"></span><span data-i18n="mapLegendOffline">全部离线</span></span>
+                </div>
+              </div>
+              <div class="node-map-view__legend-card node-map-view__legend-card--stacked" data-map-unmapped hidden></div>
+            </div>
+            <div class="node-map-view__hover-card" hidden></div>
+          </div>
+          <div class="node-map-view__empty" data-i18n="noServerData" hidden>暂无服务器数据</div>
+        </section>
+
         <section class="dashboard-controls" aria-label="筛选与视图">
           <label class="search-box" for="searchInput">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
-            <input id="searchInput" type="search" autocomplete="off" data-i18n-placeholder="searchPlaceholder" placeholder="按名称、区域或系统搜索节点…">
+            <input id="searchInput" type="search" autocomplete="off" data-i18n-placeholder="searchPlaceholder" placeholder="搜索节点名称、地区、系统...">
             <button id="clearSearch" class="clear-search" type="button" aria-label="清除搜索" hidden>×</button>
           </label>
 
           <div class="view-switch" role="group" aria-label="视图切换">
             <button class="view-button active" type="button" data-view="grid" aria-pressed="true">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
               <span data-i18n="grid">网格</span>
             </button>
             <button class="view-button" type="button" data-view="table" aria-pressed="false">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M4 14.5h16M9 5v14"/></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>
               <span data-i18n="table">表格</span>
             </button>
           </div>
         </section>
 
         <section class="filter-row">
-          <div id="filterBar" class="filter-bar" aria-label="区域筛选"></div>
+          <div id="filterBar" class="filter-bar" role="tablist" aria-label="分组"></div>
           <p id="serverSummary" class="server-summary"><span></span><em>--</em></p>
         </section>
 
@@ -181,15 +204,15 @@
             <table>
               <thead>
                 <tr>
+                  <th data-i18n="nodeName">节点名称</th>
+                  <th data-i18n="os">操作系统</th>
                   <th data-i18n="status">状态</th>
-                  <th data-i18n="node">节点</th>
-                  <th data-i18n="region">区域</th>
-                  <th data-i18n="system">系统</th>
                   <th>CPU</th>
-                  <th>RAM</th>
+                  <th data-i18n="ram">内存</th>
                   <th data-i18n="disk">磁盘</th>
-                  <th data-i18n="networkSpeed">网络速度</th>
-                  <th data-i18n="updated">更新时间</th>
+                  <th data-i18n="price">价格</th>
+                  <th data-i18n="netSpeed">网络</th>
+                  <th data-i18n="totalTransfer">总传输</th>
                 </tr>
               </thead>
               <tbody id="serverTableBody"></tbody>
@@ -197,17 +220,9 @@
           </div>
         </section>
 
-        <footer class="footer">
-          <a class="footer-project-link" href="https://github.com/huilang-me/CF-Server-Monitor" target="_blank" rel="noopener noreferrer">
-            <span id="versionText">CF-Server-Monitor Theme</span><span class="footer-external-mark" aria-hidden="true">↗</span>
-          </a>
-          <span class="footer-links">
-            <a class="footer-project-link" href="https://github.com/mi0e/CSM-Next" target="_blank" rel="noopener noreferrer">CSM-Next<span class="footer-external-mark" aria-hidden="true">↗</span></a>
-            <span class="footer-separator" aria-hidden="true">·</span>
-            <a id="footerAdminLink" href="#/" data-i18n="admin">管理后台</a>
-          </span>
-        </footer>
+        <footer class="footer site-footer"><span id="versionText">CF-Server-Monitor Theme</span><span class="footer-links"><a class="footer-project-link" href="https://github.com/huilang-me/CF-Server-Monitor" target="_blank" rel="noopener noreferrer">CF-Server-Monitor<span class="footer-external-mark" aria-hidden="true">↗</span></a><span class="footer-separator" aria-hidden="true">·</span><a class="footer-project-link" href="https://github.com/mi0e/CSM-Next" target="_blank" rel="noopener noreferrer">CSM-Next<span class="footer-external-mark" aria-hidden="true">↗</span></a></span></footer>
       </main>
+      <div id="pingPopover" class="ping-popover" role="dialog" hidden></div>
     </div>
 
     <div id="themeDrawerBackdrop" class="theme-drawer-backdrop" aria-hidden="true"></div>
@@ -254,6 +269,24 @@
                   <small data-i18n="themeGlobeHint">在首页概览旁显示交互式地球仪，并将六张卡片整理为紧凑布局。</small>
                 </span>
                 <input id="themeGlobeEnabled" type="checkbox" role="switch">
+                <i aria-hidden="true"></i>
+              </label>
+
+              <label class="theme-settings-toggle" for="themeMapEnabled">
+                <span>
+                  <b data-i18n="themeMap">世界地图</b>
+                  <small data-i18n="themeMapHint">在状态卡片下方显示节点分布地图（komari-next 默认开启）；启用地球仪时自动隐藏。</small>
+                </span>
+                <input id="themeMapEnabled" type="checkbox" role="switch">
+                <i aria-hidden="true"></i>
+              </label>
+
+              <label class="theme-settings-toggle" for="themeExpiryCardEnabled">
+                <span>
+                  <b data-i18n="themeExpiryCard">即将到期卡片</b>
+                  <small data-i18n="themeExpiryCardHint">在概览中额外显示 30 天内到期的节点数（komari-next 默认只有五张状态卡）。</small>
+                </span>
+                <input id="themeExpiryCardEnabled" type="checkbox" role="switch">
                 <i aria-hidden="true"></i>
               </label>
 
@@ -396,57 +429,63 @@
 
         <div id="detailContent" hidden>
           <section class="node-hero">
-            <div class="node-hero-main">
-              <a class="detail-back" href="#/" aria-label="返回"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></a>
-              <span id="nodeFlag" class="detail-flag" aria-hidden="true"></span>
-              <div class="node-title-wrap"><h1 id="nodeName">—</h1><code id="nodeId">—</code></div>
-            </div>
-            <span id="nodeStatus" class="detail-status">—</span>
+            <span id="nodeFlag" class="detail-flag" aria-hidden="true"></span>
+            <div class="node-title-wrap"><h1 id="nodeName">—</h1><code id="nodeId">—</code></div>
           </section>
 
           <section id="specGrid" class="spec-grid" aria-label="服务器信息"></section>
 
           <section class="monitor-workspace">
-            <div class="detail-tabs" role="tablist" aria-label="监控类型">
-              <button class="detail-tab active" type="button" data-tab="load" role="tab" aria-selected="true">Load</button>
-              <button class="detail-tab" type="button" data-tab="ping" role="tab" aria-selected="false">Ping</button>
-            </div>
+            <div class="segmented-scroll"><div class="detail-tabs" role="tablist" aria-label="监控类型">
+              <button class="detail-tab active" type="button" data-tab="load" role="tab" aria-selected="true" data-i18n="load">负载</button>
+              <button class="detail-tab" type="button" data-tab="ping" role="tab" aria-selected="false" data-i18n="ping">延迟</button>
+            </div></div>
 
             <div id="historyNotice" class="history-notice" hidden></div>
 
             <section id="loadPanel" class="detail-panel active" role="tabpanel">
-              <div class="range-switch" data-range-group="load">
-                <button type="button" data-hours="0.167">10 Min</button>
-                <button type="button" data-hours="0.5">30 Min</button>
-                <button class="active" type="button" data-hours="1">1 Hour</button>
-                <button type="button" data-hours="6">6 Hours</button>
-                <button type="button" data-hours="24">1 Day</button>
-              </div>
+              <div class="segmented-scroll"><div class="range-switch" data-range-group="load">
+                <button class="active" type="button" data-hours="0.167" data-i18n="realtime">实时</button>
+                <button type="button" data-hours="4" data-i18n="hoursRange" data-i18n-count="4">4 小时</button>
+                <button type="button" data-hours="24" data-i18n="oneDay">1 天</button>
+                <button type="button" data-hours="168" data-i18n="daysRange" data-i18n-count="7">7 天</button>
+                <button type="button" data-hours="720" data-i18n="daysRange" data-i18n-count="30">30 天</button>
+              </div></div>
 
               <div class="chart-grid">
                 <article class="chart-card"><header><h2>CPU</h2><span id="cpuCurrent">—</span></header><div id="cpuChart" class="chart-canvas"></div></article>
-                <article class="chart-card"><header><h2>RAM</h2><span id="ramCurrent">—</span></header><div id="ramChart" class="chart-canvas"></div></article>
-                <article class="chart-card"><header><h2 data-i18n="disk">磁盘</h2><span id="diskCurrent">—</span></header><div id="diskChart" class="chart-canvas"></div></article>
-                <article class="chart-card"><header><h2 data-i18n="netSpeed">网络速度</h2><span id="netCurrent">—</span></header><div id="netChart" class="chart-canvas"></div></article>
+                <article class="chart-card"><header><h2>Ram</h2><span id="ramCurrent">—</span></header><div id="ramChart" class="chart-canvas"></div></article>
+                <article class="chart-card"><header><h2>Disk</h2><span id="diskCurrent">—</span></header><div id="diskChart" class="chart-canvas"></div></article>
+                <article class="chart-card"><header><h2 data-i18n="netSpeed">网络</h2><span id="netCurrent">—</span></header><div id="netChart" class="chart-canvas"></div></article>
                 <article class="chart-card"><header><h2 data-i18n="connections">连接数</h2><span id="connectionsCurrent">—</span></header><div id="connectionsChart" class="chart-canvas"></div></article>
-                <article class="chart-card"><header><h2 data-i18n="processes">进程</h2><span id="processesCurrent">—</span></header><div id="processesChart" class="chart-canvas"></div></article>
+                <article class="chart-card"><header><h2 data-i18n="processes">进程数</h2><span id="processesCurrent">—</span></header><div id="processesChart" class="chart-canvas"></div></article>
               </div>
             </section>
 
             <section id="pingPanel" class="detail-panel" role="tabpanel" hidden>
-              <div class="range-switch" data-range-group="ping">
-                <button type="button" data-hours="0.5">30 Min</button>
-                <button class="active" type="button" data-hours="1">1 Hour</button>
-                <button type="button" data-hours="6">6 Hours</button>
-                <button type="button" data-hours="12">12 Hours</button>
-                <button type="button" data-hours="24">1 Day</button>
-              </div>
-              <div id="pingLegend" class="ping-legend"></div>
-              <article class="ping-chart-card"><div id="pingChart" class="chart-canvas ping-chart"></div></article>
+              <div class="segmented-scroll"><div class="range-switch" data-range-group="ping">
+                <button class="active" type="button" data-hours="1" data-i18n="oneHour">1 小时</button>
+                <button type="button" data-hours="6" data-i18n="hoursRange" data-i18n-count="6">6 小时</button>
+                <button type="button" data-hours="12" data-i18n="hoursRange" data-i18n-count="12">12 小时</button>
+                <button type="button" data-hours="24" data-i18n="oneDay">1 天</button>
+              </div></div>
+              <article class="ping-summary-card">
+                <span class="ping-tips" tabindex="0" data-i18n-title="lossTips"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg></span>
+                <div id="pingLegend" class="ping-legend"></div>
+              </article>
+              <article class="ping-chart-card">
+                <div id="pingChart" class="chart-canvas ping-chart"></div>
+                <div id="pingSeriesLegend" class="ping-series-legend"></div>
+                <div class="ping-controls">
+                  <label class="ping-smooth"><input id="pingSmooth" type="checkbox" role="switch"><span class="switch-track" aria-hidden="true"></span><span data-i18n="smooth">平滑</span></label><span class="ping-tips ping-smooth-tip" tabindex="0" data-i18n-title="smoothTips"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg></span>
+                  <button id="pingToggleAll" class="outline-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span id="pingToggleAllLabel" data-i18n="hideAll">隐藏全部</span></button>
+                </div>
+              </article>
             </section>
           </section>
+          </section>
 
-          <footer class="footer detail-footer"><span id="versionText">CF-Server-Monitor Theme</span><a href="#/" data-i18n="back">返回仪表盘</a></footer>
+          <footer class="footer site-footer detail-footer"><span id="versionText">CF-Server-Monitor Theme</span><span class="footer-links"><a class="footer-project-link" href="https://github.com/huilang-me/CF-Server-Monitor" target="_blank" rel="noopener noreferrer">CF-Server-Monitor<span class="footer-external-mark" aria-hidden="true">↗</span></a><span class="footer-separator" aria-hidden="true">·</span><a class="footer-project-link" href="https://github.com/mi0e/CSM-Next" target="_blank" rel="noopener noreferrer">CSM-Next<span class="footer-external-mark" aria-hidden="true">↗</span></a></span></footer>
         </div>
       </main>
     </div>

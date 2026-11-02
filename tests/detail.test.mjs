@@ -65,7 +65,7 @@ const realSetTimeout = globalThis.setTimeout
 globalThis.setInterval = () => 1
 globalThis.clearInterval = () => {}
 
-const { mount } = await import(`${new URL('../src/assets/js/detail.js', import.meta.url).href}?smoke=${Date.now()}`)
+const { mount, cutPeakValues, interpolateNullsLinear } = await import(`${new URL('../src/assets/js/detail.js', import.meta.url).href}?smoke=${Date.now()}`)
 await mount({ name: 'server', id: 'preview-2', siteIndex: 0 })
 await new Promise(resolve => realSetTimeout(resolve, 80))
 
@@ -73,7 +73,7 @@ if (nodeFor('#detailContent').hidden) throw new Error('Detail content did not be
 if (nodeFor('#nodeName').textContent !== 'yt-Hong Kong') throw new Error('Server identity did not render')
 const specs = nodeFor('#specGrid').innerHTML
 if (!specs.includes('AMD EPYC 7542')) throw new Error('Specification cards did not render')
-if (specs.includes('虚拟化') || specs.includes('GPU') || specs.includes('内核')) throw new Error('Removed specification fields were rendered')
+if (!specs.includes('虚拟化') || !specs.includes('GPU') || !specs.includes('内核版本')) throw new Error('komari Virtualization / GPU / Kernel cards must render')
 if (!nodeFor('#cpuChart').innerHTML.includes('chart-svg')) throw new Error('Load chart SVG did not render')
 if (!nodeFor('#pingChart').innerHTML.includes('chart-line')) throw new Error('Ping chart SVG did not render')
 if ((nodeFor('#pingLegend').innerHTML.match(/ping-legend-item/g) || []).length !== 4) throw new Error('Ping legend did not render four probes')
@@ -82,6 +82,13 @@ const cpuChart = nodeFor('#cpuChart')
 cpuChart.onpointermove({ clientX: 170, clientY: 80 })
 const tooltip = cpuChart.querySelector('.chart-tooltip')
 if (tooltip.hidden || !tooltip.innerHTML.includes('CPU')) throw new Error('Chart hover tooltip did not render')
-if (cpuChart.querySelector('.chart-hover-line').hidden) throw new Error('Chart hover crosshair did not render')
+if (cpuChart.innerHTML.includes('chart-hover-line')) throw new Error('komari charts use cursor={false}: no crosshair')
+if (!cpuChart.querySelector('.chart-hover-points').innerHTML.includes('chart-hover-point')) throw new Error('Chart hover dot did not render')
 
+const smoothed = cutPeakValues([...Array(8).fill(10), 30, ...Array(8).fill(10)].map(v => ({ v })), ['v'])
+if (smoothed[8].v !== 10 || smoothed.some(row => typeof row.v !== 'number')) throw new Error('cutPeakValues must drop the spike and EWMA-fill it')
+const minute = 60_000
+const gapped = interpolateNullsLinear([0, 1, 2, 3, 4, 40].map((m, i) => ({ timestamp: 1_700_000_000_000 + m * minute, v: [10, null, 30, 40, null, 80][i] })), ['v'])
+if (gapped[1].v !== 20) throw new Error('interpolateNullsLinear must bridge a short gap linearly')
+if (gapped[4].v !== null) throw new Error('interpolateNullsLinear must keep gaps longer than the cap')
 console.log('Detail smoke test passed: specs, charts and hover tooltips rendered.')

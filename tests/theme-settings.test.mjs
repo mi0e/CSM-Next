@@ -18,6 +18,8 @@ test('theme settings normalize safe values and clamp stored opacity', () => {
   }), {
     backgroundImage: 'https://cdn.example.com/bg.webp',
     globeEnabled: true,
+    mapEnabled: true,
+    expiryCardEnabled: false,
     transparencyEnabled: true,
     transparencyMode: 'soft',
     panelOpacity: 0.72,
@@ -33,6 +35,20 @@ test('legacy opacity settings migrate to the existing glass appearance', () => {
   assert.equal(settings.transparencyMode, 'glass')
   assert.equal(settings.panelBlur, 18)
   assert.equal(settings.globeEnabled, false)
+})
+
+test('expiry card is opt-in (komari shows five status cards) and strict boolean', () => {
+  assert.equal(normalizeThemeSettings({}).expiryCardEnabled, false)
+  assert.equal(normalizeThemeSettings({}, { expiryCardEnabled: true }).expiryCardEnabled, true)
+  assert.throws(() => validateThemeSettings({ backgroundImage: '', expiryCardEnabled: 'yes', panelOpacity: 1, customCss: '' }), error => error.code === 'invalid_expiry_card_enabled')
+})
+
+test('world map is on by default (komari mapView) and strict boolean', () => {
+  assert.equal(normalizeThemeSettings({}).mapEnabled, true)
+  assert.equal(normalizeThemeSettings({}, { mapEnabled: false }).mapEnabled, false)
+  assert.equal(normalizeThemeSettings({ mapEnabled: true }, { mapEnabled: false }).mapEnabled, true)
+  assert.equal(validateThemeSettings({ backgroundImage: '', mapEnabled: false, panelOpacity: 1, customCss: '' }).mapEnabled, false)
+  assert.throws(() => validateThemeSettings({ backgroundImage: '', mapEnabled: 'yes', panelOpacity: 1, customCss: '' }), error => error.code === 'invalid_map_enabled' && error.field === 'mapEnabled')
 })
 
 test('globe setting is strict boolean and inherits fallback', () => {
